@@ -60,6 +60,21 @@ Issuance helpers live in `src/modules/auth/utils/jwt.ts` (`signAccessToken` / `v
 
 Logout optionally accepts the current Bearer access token so its `jti` is written to Redis (`auth:deny:jti:*`) until access TTL expires.
 
+## MFA (privileged roles)
+
+`ORG_ADMIN`, `DPO`, and `AUDITOR` should enroll TOTP:
+
+1. Login (may set `mfaEnrollmentRequired: true` until enrolled)
+2. `POST /api/v1/auth/mfa/setup` → secret + otpauth URL
+3. `POST /api/v1/auth/mfa/confirm` with a TOTP code
+4. Later logins return `{ mfaRequired: true, mfaToken }` until `POST /auth/mfa/verify`
+
+Use `requireMfa` from `src/shared/middleware/require-mfa.middleware.ts` on sensitive routes.
+
+## Permission cache
+
+`authenticate` loads permissions from Redis (`auth:permissions:{orgId}:{userId}`) when present, otherwise resolves from DB and caches. Role permission updates invalidate affected users.
+
 ## Errors
 
 | Case | HTTP | Code |

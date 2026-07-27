@@ -74,12 +74,18 @@ See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` field
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/auth/login` | body: `organizationId`, `email`, `password` |
+| POST | `/api/v1/auth/login` | body: `organizationId`, `email`, `password` — may return `mfaRequired` |
+| POST | `/api/v1/auth/mfa/verify` | body: `mfaToken`, `code` — completes privileged MFA login |
+| POST | `/api/v1/auth/mfa/setup` | Bearer required — returns TOTP secret + otpauth URL |
+| POST | `/api/v1/auth/mfa/confirm` | Bearer required — body: `code` enables MFA |
+| POST | `/api/v1/auth/accept-invite` | body: `organizationId`, `email`, `inviteToken`, `password` |
 | POST | `/api/v1/auth/refresh` | body: `refreshToken` (rotating) |
 | POST | `/api/v1/auth/logout` | body: `refreshToken`; optional Bearer access token for deny-list |
 | GET | `/api/v1/auth/me` | Bearer required |
 
 Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
+
+Privileged roles (`ORG_ADMIN`, `DPO`, `AUDITOR`) should enroll MFA. Use `requireMfa` middleware on sensitive routes (exported from auth module). Role permission changes invalidate Redis permission cache keys so guards pick up new permissions immediately.
 
 ### Framework endpoints
 
