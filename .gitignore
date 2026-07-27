@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+
+# build
+dist/
+build/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# coverage / test
+coverage/
+.nyc_output/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# prisma
+prisma/*.db
+prisma/*.db-journal
+
+# docker volumes (if bind-mounted locally)
+docker/data/
+
+# misc
+.tmp/
+.temp/
+*.pem
