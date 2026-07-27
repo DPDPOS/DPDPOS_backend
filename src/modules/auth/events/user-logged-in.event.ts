@@ -5,6 +5,7 @@ export const UserLoggedInEventType = DOMAIN_EVENTS.UserLoggedIn;
 
 export type UserLoggedInPayload = {
   userId: string;
+  email: string;
   sessionId?: string;
 };
 

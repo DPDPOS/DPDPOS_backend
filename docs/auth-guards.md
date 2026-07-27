@@ -53,9 +53,12 @@ Access token claims (signed with `JWT_ACCESS_SECRET`):
 | `organizationId` | tenant id |
 | `permissions` | `resource:action` strings |
 | `roles` | role names |
+| `jti` | unique access-token id (used for logout deny-list) |
 | `mfaVerified` | optional MFA assertion |
 
-Issuance helpers live in `src/modules/auth/utils/jwt.ts` (`signAccessToken` / `verifyAccessToken`). Full login/refresh lands in the JWT sessions feature; until then, tests and local tooling may mint tokens with `signAccessToken`.
+Issuance helpers live in `src/modules/auth/utils/jwt.ts` (`signAccessToken` / `verifyAccessToken`). Session APIs: `POST /api/v1/auth/login`, `/refresh`, `/logout`, and `GET /api/v1/auth/me`. Tests may still mint tokens with `signAccessToken`.
+
+Logout optionally accepts the current Bearer access token so its `jti` is written to Redis (`auth:deny:jti:*`) until access TTL expires.
 
 ## Errors
 

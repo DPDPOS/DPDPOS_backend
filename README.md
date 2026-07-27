@@ -69,3 +69,14 @@ Full conventions live in `docs/architecture.md`.
 Protected routes must use `authenticate` + `requirePermission(...)`.
 
 See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` fields, and error codes. Permission strings are frozen in `src/shared/constants/permissions.ts`.
+
+### Auth session endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/v1/auth/login` | body: `organizationId`, `email`, `password` |
+| POST | `/api/v1/auth/refresh` | body: `refreshToken` (rotating) |
+| POST | `/api/v1/auth/logout` | body: `refreshToken`; optional Bearer access token for deny-list |
+| GET | `/api/v1/auth/me` | Bearer required |
+
+Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
