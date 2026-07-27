@@ -191,7 +191,7 @@ model Control {
   framework    Framework    @relation(fields: [frameworkId], references: [id])
   requirements Requirement[]
 
-  @@unique([organizationId, code])
+  @@unique([frameworkId, code])
   @@index([organizationId, frameworkId])
   @@map("controls")
 }
@@ -215,7 +215,7 @@ model Requirement {
   framework    Framework    @relation(fields: [frameworkId], references: [id])
   control      Control?     @relation(fields: [controlId], references: [id])
 
-  @@unique([organizationId, code])
+  @@unique([frameworkId, code])
   @@index([organizationId, frameworkId])
   @@map("requirements")
 }
