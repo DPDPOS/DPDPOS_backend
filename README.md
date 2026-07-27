@@ -88,3 +88,11 @@ Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000
 | POST | `/api/v1/framework/generate` | `framework:generate` |
 | GET | `/api/v1/framework/roadmap` | `framework:read` |
 | POST | `/api/v1/framework/publish` | `framework:publish` |
+
+### Controls endpoints
+
+| Method | Path | Permission |
+|---|---|---|
+| GET | `/api/v1/controls` | `control:read` |
+| POST | `/api/v1/controls` | `control:create` |
+| PATCH | `/api/v1/controls/:id` | `control:update` |
