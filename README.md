@@ -63,3 +63,9 @@ See `dpdpos-progress-tracker.xlsx` and `docs/09_developer_a_implementation_plan.
 ## Architecture
 
 Full conventions live in `docs/architecture.md`.
+
+## Auth guards (for all developers)
+
+Protected routes must use `authenticate` + `requirePermission(...)`.
+
+See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` fields, and error codes. Permission strings are frozen in `src/shared/constants/permissions.ts`.
