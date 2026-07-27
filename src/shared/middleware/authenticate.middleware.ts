@@ -7,16 +7,17 @@ import {
   extractBearerToken,
   verifyAccessToken,
 } from "../../modules/auth/utils/jwt.js";
+import { isAccessTokenDenied } from "../../modules/auth/utils/token-denylist.js";
 
 /**
  * Verifies Bearer access JWT and attaches RequestContext to the request.
  * Use before requirePermission(...) on protected routes.
  */
-export function authenticate(
+export async function authenticate(
   req: AuthenticatedRequest,
   _res: Response,
   next: NextFunction,
-): void {
+): Promise<void> {
   try {
     const token = extractBearerToken(req.header("authorization") ?? undefined);
     if (!token) {
@@ -24,6 +25,10 @@ export function authenticate(
     }
 
     const claims = verifyAccessToken(token);
+    if (await isAccessTokenDenied(claims.jti)) {
+      throw new UnauthorizedError("Access token has been revoked");
+    }
+
     const context: RequestContext = {
       correlationId:
         req.correlationId ?? getCorrelationId() ?? claims.jti ?? claims.sub,
