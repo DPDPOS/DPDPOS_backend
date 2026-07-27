@@ -1,4 +1,5 @@
 import type { UserStatus } from "@prisma/client";
+import { randomBytes } from "node:crypto";
 import {
   ConflictError,
   NotFoundError,
@@ -13,11 +14,19 @@ import {
   normalizePagination,
 } from "../../../shared/pagination/pagination.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
+import { hashToken } from "../../auth/utils/token-crypto.js";
 import type { CreateUserDto, UpdateUserDto } from "../dto/user.dto.js";
 import { UserRepository } from "../repositories/user.repository.js";
 import { toUserResponse, type UserResponse } from "../types/user.types.js";
 
 const ALLOWED_STATUSES: UserStatus[] = ["ACTIVE", "INVITED", "DISABLED"];
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type InviteUserResult = UserResponse & {
+  /** One-time plaintext invite token — deliver out-of-band (email). */
+  inviteToken: string;
+  inviteExpiresAt: string;
+};
 
 export class UserService {
   constructor(private readonly repo = new UserRepository()) {}
@@ -44,7 +53,7 @@ export class UserService {
     };
   }
 
-  async invite(ctx: RequestContext, input: CreateUserDto): Promise<UserResponse> {
+  async invite(ctx: RequestContext, input: CreateUserDto): Promise<InviteUserResult> {
     const email = input.email.trim().toLowerCase();
 
     const existing = await this.repo.findByEmail({
@@ -59,12 +68,17 @@ export class UserService {
     const roleIds = roles.map((r) => r.id);
     const roleNames = roles.map((r) => r.name);
 
+    const inviteToken = randomBytes(32).toString("base64url");
+    const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
+
     return withTransaction(async (tx) => {
       const user = await this.repo.create(tx, {
         organizationId: ctx.organizationId,
         email,
         name: input.name.trim(),
         status: "INVITED",
+        inviteTokenHash: hashToken(inviteToken),
+        inviteExpiresAt,
         createdBy: ctx.actorUserId,
         updatedBy: ctx.actorUserId,
       });
@@ -86,6 +100,7 @@ export class UserService {
           email: user.email,
           invitedBy: ctx.actorUserId,
           roleIds,
+          inviteExpiresAt: inviteExpiresAt.toISOString(),
         },
       });
 
@@ -102,11 +117,15 @@ export class UserService {
         });
       }
 
-      return toUserResponse({
-        ...user,
-        roleIds,
-        roleNames,
-      });
+      return {
+        ...toUserResponse({
+          ...user,
+          roleIds,
+          roleNames,
+        }),
+        inviteToken,
+        inviteExpiresAt: inviteExpiresAt.toISOString(),
+      };
     });
   }
 

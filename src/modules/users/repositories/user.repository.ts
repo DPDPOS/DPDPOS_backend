@@ -29,6 +29,8 @@ export type CreateUserData = {
   email: string;
   name: string;
   status?: UserStatus;
+  inviteTokenHash?: string | null;
+  inviteExpiresAt?: Date | null;
   createdBy?: string;
   updatedBy?: string;
 };
@@ -36,6 +38,9 @@ export type CreateUserData = {
 export type UpdateUserData = {
   name?: string;
   status?: UserStatus;
+  inviteTokenHash?: string | null;
+  inviteExpiresAt?: Date | null;
+  passwordHash?: string | null;
   updatedBy?: string;
 };
 
@@ -128,6 +133,8 @@ export class UserRepository extends BaseRepository {
         email: data.email.toLowerCase(),
         name: data.name,
         status: data.status ?? "INVITED",
+        inviteTokenHash: data.inviteTokenHash,
+        inviteExpiresAt: data.inviteExpiresAt,
         createdBy: data.createdBy,
         updatedBy: data.updatedBy ?? data.createdBy,
       },
@@ -146,6 +153,15 @@ export class UserRepository extends BaseRepository {
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.inviteTokenHash !== undefined
+          ? { inviteTokenHash: data.inviteTokenHash }
+          : {}),
+        ...(data.inviteExpiresAt !== undefined
+          ? { inviteExpiresAt: data.inviteExpiresAt }
+          : {}),
+        ...(data.passwordHash !== undefined
+          ? { passwordHash: data.passwordHash }
+          : {}),
         ...(data.updatedBy !== undefined ? { updatedBy: data.updatedBy } : {}),
       },
     });

@@ -6,7 +6,14 @@ import {
 import { sendSuccess } from "../../../shared/middleware/response-envelope.middleware.js";
 import { getCorrelationId } from "../../../shared/middleware/correlation-id.middleware.js";
 import { extractBearerToken } from "../utils/jwt.js";
-import type { LoginDto, LogoutDto, RefreshDto } from "../dto/auth.dto.js";
+import type {
+  AcceptInviteDto,
+  LoginDto,
+  LogoutDto,
+  MfaConfirmDto,
+  MfaVerifyDto,
+  RefreshDto,
+} from "../dto/auth.dto.js";
 import { authService } from "../services/auth.service.js";
 
 export class AuthController {
@@ -18,6 +25,59 @@ export class AuthController {
         ipAddress: req.ip,
         correlationId: getCorrelationId(),
       });
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async verifyMfa(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const body = req.body as MfaVerifyDto;
+      const result = await authService.verifyMfa(body, {
+        userAgent: req.header("user-agent") ?? undefined,
+        ipAddress: req.ip,
+        correlationId: getCorrelationId(),
+      });
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async acceptInvite(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const body = req.body as AcceptInviteDto;
+      const result = await authService.acceptInvite(body);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async setupMfa(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const result = await authService.setupMfa(ctx);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async confirmMfa(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const body = req.body as MfaConfirmDto;
+      const result = await authService.confirmMfa(ctx, body);
       sendSuccess(res, result);
     } catch (err) {
       next(err);

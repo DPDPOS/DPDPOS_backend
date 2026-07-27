@@ -3,8 +3,11 @@ import { authenticate } from "../../../shared/middleware/authenticate.middleware
 import { validateBody } from "../../../shared/middleware/validate.middleware.js";
 import { authController } from "../controllers/auth.controller.js";
 import {
+  acceptInviteDtoSchema,
   loginDtoSchema,
   logoutDtoSchema,
+  mfaConfirmDtoSchema,
+  mfaVerifyDtoSchema,
   refreshDtoSchema,
 } from "../dto/auth.dto.js";
 
@@ -15,6 +18,31 @@ export function createAuthRouter(): Router {
     "/login",
     validateBody(loginDtoSchema),
     (req, res, next) => void authController.login(req, res, next),
+  );
+
+  router.post(
+    "/mfa/verify",
+    validateBody(mfaVerifyDtoSchema),
+    (req, res, next) => void authController.verifyMfa(req, res, next),
+  );
+
+  router.post(
+    "/accept-invite",
+    validateBody(acceptInviteDtoSchema),
+    (req, res, next) => void authController.acceptInvite(req, res, next),
+  );
+
+  router.post(
+    "/mfa/setup",
+    authenticate,
+    (req, res, next) => void authController.setupMfa(req, res, next),
+  );
+
+  router.post(
+    "/mfa/confirm",
+    authenticate,
+    validateBody(mfaConfirmDtoSchema),
+    (req, res, next) => void authController.confirmMfa(req, res, next),
   );
 
   router.post(

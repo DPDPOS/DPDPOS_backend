@@ -66,6 +66,8 @@ describe("Users HTTP API", () => {
     expect(created.body.data.status).toBe("INVITED");
     expect(created.body.data.roleNames).toContain("MEMBER");
     expect(created.body.data.passwordHash).toBeUndefined();
+    expect(created.body.data.inviteToken).toBeTruthy();
+    expect(created.body.data.inviteExpiresAt).toBeTruthy();
     const userId = created.body.data.id as string;
 
     const listed = await request(app)
