@@ -5,6 +5,7 @@ import {
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
+import { invalidatePermissionsForUsers } from "../../../infrastructure/cache/permission-cache.js";
 import {
   buildPaginationMeta,
   normalizePagination,
@@ -114,6 +115,12 @@ export class RoleService {
           isSystemRole: role.isSystemRole,
         },
       });
+
+      const userIds = await this.repo.findUserIdsByRole({
+        organizationId: ctx.organizationId,
+        roleId: role.id,
+      });
+      await invalidatePermissionsForUsers(ctx.organizationId, userIds);
 
       return toRoleResponse(role);
     });

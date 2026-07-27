@@ -115,4 +115,18 @@ export class RoleRepository extends BaseRepository {
     });
     return mapRole(row);
   }
+
+  async findUserIdsByRole(
+    query: TenantScopedQuery & { roleId: string },
+  ): Promise<string[]> {
+    const where = this.tenantWhere(query);
+    const rows = await prisma.userRole.findMany({
+      where: {
+        roleId: query.roleId,
+        organizationId: where.organizationId,
+      },
+      select: { userId: true },
+    });
+    return [...new Set(rows.map((r) => r.userId))];
+  }
 }
