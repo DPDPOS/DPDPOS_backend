@@ -73,6 +73,8 @@ model User {
   status         UserStatus @default(INVITED)
   mfaEnabled     Boolean    @default(false) @map("mfa_enabled")
   mfaSecretEnc   String?    @map("mfa_secret_enc")
+  inviteTokenHash String?   @map("invite_token_hash")
+  inviteExpiresAt DateTime? @map("invite_expires_at")
   lastLoginAt    DateTime?  @map("last_login_at")
   createdBy      String?    @map("created_by") @db.Uuid
   updatedBy      String?    @map("updated_by") @db.Uuid
@@ -87,6 +89,7 @@ model User {
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
+  @@index([inviteTokenHash])
   @@map("users")
 }
 
@@ -248,11 +251,17 @@ model OutboxEvent {
   correlationId  String?   @map("correlation_id")
   createdAt      DateTime  @default(now()) @map("created_at")
   publishedAt    DateTime? @map("published_at")
+  attempts       Int       @default(0)
+  lockedAt       DateTime? @map("locked_at")
+  lockToken      String?   @map("lock_token")
+  availableAt    DateTime? @map("available_at")
+  lastError      String?   @map("last_error") @db.Text
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([publishedAt, createdAt])
   @@index([organizationId])
+  @@index([availableAt, publishedAt])
   @@map("outbox_events")
 }
 

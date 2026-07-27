@@ -4,6 +4,7 @@ import { publishDomainEvent } from "../event-bus.js";
 import type { BaseDomainEvent, DomainEventName } from "../types/base-event.interface.js";
 import {
   claimUnpublishedOutboxEvents,
+  markOutboxFailed,
   markOutboxPublished,
 } from "./outbox.repository.js";
 
@@ -17,23 +18,35 @@ async function relayOnce(): Promise<void> {
     const rows = await claimUnpublishedOutboxEvents(50);
     if (rows.length === 0) return;
 
-    const publishedIds: string[] = [];
+    let published = 0;
+    let failed = 0;
+
     for (const row of rows) {
-      const event: BaseDomainEvent = {
-        eventId: row.id,
-        eventType: row.eventType as DomainEventName,
-        organizationId: row.organizationId,
-        occurredAt: row.createdAt.toISOString(),
-        actorUserId: row.actorUserId ?? undefined,
-        correlationId: row.correlationId ?? undefined,
-        payload: (row.payload as Record<string, unknown>) ?? {},
-      };
-      await publishDomainEvent(event);
-      publishedIds.push(row.id);
+      try {
+        const event: BaseDomainEvent = {
+          eventId: row.id,
+          eventType: row.eventType as DomainEventName,
+          organizationId: row.organizationId,
+          occurredAt: row.createdAt.toISOString(),
+          actorUserId: row.actorUserId ?? undefined,
+          correlationId: row.correlationId ?? undefined,
+          payload: (row.payload as Record<string, unknown>) ?? {},
+        };
+        await publishDomainEvent(event);
+        await markOutboxPublished([row.id], row.lockToken);
+        published += 1;
+      } catch (err) {
+        failed += 1;
+        const message = err instanceof Error ? err.message : String(err);
+        await markOutboxFailed(row.id, row.lockToken, message, row.attempts);
+        logger.error(
+          { err, eventId: row.id, attempts: row.attempts },
+          "outbox.relay_item_failed",
+        );
+      }
     }
 
-    await markOutboxPublished(publishedIds);
-    logger.info({ count: publishedIds.length }, "outbox.relayed");
+    logger.info({ published, failed }, "outbox.relayed");
   } catch (err) {
     logger.error({ err }, "outbox.relay_failed");
   } finally {
@@ -58,4 +71,9 @@ export function stopOutboxRelay(): void {
     timer = null;
     logger.info("outbox.relay_stopped");
   }
+}
+
+/** Exported for tests — one relay tick. */
+export async function relayOutboxOnceForTests(): Promise<void> {
+  await relayOnce();
 }
