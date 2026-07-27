@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Developer A — Core Platform + Governance + Outbox
+// =============================================================================
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum FrameworkStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ControlStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  IMPLEMENTED
+  VERIFIED
+}
+
+model Organization {
+  id            String             @id @default(uuid()) @db.Uuid
+  name          String
+  industry      String?
+  companySize   String?            @map("company_size")
+  operatingRegion String?          @map("operating_region")
+  companyType   String?            @map("company_type")
+  maturityLevel String?            @map("maturity_level")
+  isSignificantDataFiduciary Boolean @default(false) @map("is_significant_data_fiduciary")
+  status        OrganizationStatus @default(ACTIVE)
+  createdBy     String?            @map("created_by") @db.Uuid
+  updatedBy     String?            @map("updated_by") @db.Uuid
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  deletedAt     DateTime?          @map("deleted_at")
+
+  users         User[]
+  roles         Role[]
+  departments   Department[]
+  frameworks    Framework[]
+  controls      Control[]
+  requirements  Requirement[]
+  refreshSessions RefreshSession[]
+  outboxEvents  OutboxEvent[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  email          String
+  name           String
+  passwordHash   String?    @map("password_hash")
+  status         UserStatus @default(INVITED)
+  mfaEnabled     Boolean    @default(false) @map("mfa_enabled")
+  mfaSecretEnc   String?    @map("mfa_secret_enc")
+  lastLoginAt    DateTime?  @map("last_login_at")
+  createdBy      String?    @map("created_by") @db.Uuid
+  updatedBy      String?    @map("updated_by") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  deletedAt      DateTime?  @map("deleted_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userRoles      UserRole[]
+  headedDepartments Department[] @relation("DepartmentHead")
+  refreshSessions RefreshSession[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+  @@map("users")
+}
+
+model Role {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  permissions    String[] @default([])
+  isSystemRole   Boolean  @default(false) @map("is_system_role")
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userRoles      UserRole[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+model UserRole {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  assignedBy     String?  @map("assigned_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([organizationId])
+  @@map("user_roles")
+}
+
+model Department {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  headUserId     String?  @map("head_user_id") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  headUser     User?        @relation("DepartmentHead", fields: [headUserId], references: [id])
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Framework {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  name           String
+  status         FrameworkStatus @default(DRAFT)
+  industryProfile String?        @map("industry_profile")
+  maturityLevel  String?         @map("maturity_level")
+  isSdf          Boolean         @default(false) @map("is_sdf")
+  roadmapJson    Json?           @map("roadmap_json")
+  publishedAt    DateTime?       @map("published_at")
+  createdBy      String?         @map("created_by") @db.Uuid
+  updatedBy      String?         @map("updated_by") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  controls     Control[]
+  requirements Requirement[]
+
+  @@index([organizationId, status])
+  @@map("frameworks")
+}
+
+model Control {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  frameworkId    String        @map("framework_id") @db.Uuid
+  code           String
+  title          String
+  description    String?
+  ownerUserId    String?       @map("owner_user_id") @db.Uuid
+  dueAt          DateTime?     @map("due_at")
+  status         ControlStatus @default(NOT_STARTED)
+  legalBasisRef  String?       @map("legal_basis_ref")
+  createdBy      String?       @map("created_by") @db.Uuid
+  updatedBy      String?       @map("updated_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  framework    Framework    @relation(fields: [frameworkId], references: [id])
+  requirements Requirement[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, frameworkId])
+  @@map("controls")
+}
+
+model Requirement {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  frameworkId    String   @map("framework_id") @db.Uuid
+  controlId      String?  @map("control_id") @db.Uuid
+  code           String
+  title          String
+  description    String?
+  legalBasisRef  String?  @map("legal_basis_ref")
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  framework    Framework    @relation(fields: [frameworkId], references: [id])
+  control      Control?     @relation(fields: [controlId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId, frameworkId])
+  @@map("requirements")
+}
+
+model RefreshSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  tokenHash      String    @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  userAgent      String?   @map("user_agent")
+  ipAddress      String?   @map("ip_address")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_sessions")
+}
+
+model OutboxEvent {
+  id             String    @id @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  eventType      String    @map("event_type")
+  payload        Json
+  actorUserId    String?   @map("actor_user_id") @db.Uuid
+  correlationId  String?   @map("correlation_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  publishedAt    DateTime? @map("published_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([publishedAt, createdAt])
+  @@index([organizationId])
+  @@map("outbox_events")
+}
+
+// =============================================================================
+// Developer B / C tables — owned by other streams; add via their migrations.
+// Placeholders (do not implement here):
+//   data_assets, processing_activities, notices, consent_records,
+//   data_subject_requests, validation_rules, validation_runs, validation_results,
+//   violations, remediation_tasks, evidence_files, reports, notifications,
+//   ai_usage_logs, audit_logs
+// =============================================================================
