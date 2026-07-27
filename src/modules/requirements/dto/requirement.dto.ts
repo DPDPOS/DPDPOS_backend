@@ -42,4 +42,11 @@ export const requirementIdParamsSchema = z
 
 export type CreateRequirementDto = z.infer<typeof createRequirementDtoSchema>;
 export type MapRequirementDto = z.infer<typeof mapRequirementDtoSchema>;
-export type ListRequirementsQuery = z.infer<typeof listRequirementsQuerySchema>;
+/** Query type for list — keep optional keys truly optional (zod transform makes output awkward). */
+export type ListRequirementsQuery = {
+  frameworkId?: string;
+  controlId?: string;
+  unmapped?: boolean;
+  page?: number;
+  pageSize?: number;
+};

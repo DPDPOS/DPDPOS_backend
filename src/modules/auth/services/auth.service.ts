@@ -279,10 +279,9 @@ export class AuthService {
     accessToken?: string,
   ): Promise<{ success: true }> {
     const tokenHash = hashToken(input.refreshToken);
-    let revoked: { userId: string; organizationId: string } | null = null;
-    await withTransaction(async (tx) => {
-      revoked = await this.repo.revokeRefreshSessionByHash(tx, tokenHash);
-    });
+    const revoked = await withTransaction(async (tx) =>
+      this.repo.revokeRefreshSessionByHash(tx, tokenHash),
+    );
 
     if (accessToken) {
       const claims = decodeAccessTokenUnsafe(accessToken);
