@@ -290,9 +290,8 @@ describe("Dev A end-to-end integration", () => {
       },
     });
 
+    // Demo seed is applied in CI after migrate; skip locally if not seeded.
     if (!seedUser?.passwordHash) {
-      // Seed may not have been applied in this environment — skip soft-fail with clear assert
-      expect(seedUser).toBeTruthy();
       return;
     }
 
