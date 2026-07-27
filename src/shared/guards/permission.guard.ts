@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from "express";
 import { ForbiddenError } from "../errors/app-error.js";
-import type { AuthenticatedRequest } from "./auth.guard.js";
+import type { AuthenticatedRequest } from "../types/authenticated-request.js";
 
 /**
  * PermissionGuard — checks resource:action permission strings against the caller's set.

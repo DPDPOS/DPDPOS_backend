@@ -1,27 +1,36 @@
-import type { NextFunction, Request, Response } from "express";
+import type { NextFunction, Response } from "express";
 import { UnauthorizedError } from "../errors/app-error.js";
 import type { RequestContext } from "../types/request-context.js";
+import type { AuthenticatedRequest } from "../types/authenticated-request.js";
+import { authenticate } from "../middleware/authenticate.middleware.js";
 
-export type AuthenticatedRequest = Request & {
-  context?: RequestContext;
-  correlationId?: string;
-};
+export type { AuthenticatedRequest };
 
 /**
- * Auth guard contract — verifies JWT and attaches RequestContext.
- * Full JWT verification lands in feature/a/auth; this stub rejects unauthenticated calls
- * once auth is wired. During early scaffolding, routes that need auth should use this guard.
+ * Ensures the request was authenticated and RequestContext is present.
+ * Prefer chaining: authenticate → requirePermission → handler.
+ * authGuard alone also runs JWT verification for convenience.
  */
 export function authGuard(
   req: AuthenticatedRequest,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void {
-  if (!req.context?.actorUserId || !req.context.organizationId) {
-    next(new UnauthorizedError("Authentication required"));
+  if (req.context?.actorUserId && req.context.organizationId) {
+    next();
     return;
   }
-  next();
+  authenticate(req, res, (err?: unknown) => {
+    if (err) {
+      next(err);
+      return;
+    }
+    if (!req.context?.actorUserId || !req.context.organizationId) {
+      next(new UnauthorizedError("Authentication required"));
+      return;
+    }
+    next();
+  });
 }
 
 export function getRequestContext(req: AuthenticatedRequest): RequestContext {
