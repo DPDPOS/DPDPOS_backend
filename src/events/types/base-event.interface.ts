@@ -1,0 +1,82 @@
+export type DomainEventName =
+  | "OrganizationCreated"
+  | "OrganizationOnboarded"
+  | "UserInvited"
+  | "UserDeactivated"
+  | "RoleAssigned"
+  | "RolePermissionsChanged"
+  | "DepartmentCreated"
+  | "FrameworkPublished"
+  | "ControlAssigned"
+  | "ControlUpdated"
+  | "RequirementMapped"
+  | "DataAssetCreated"
+  | "RetentionExpiringSoon"
+  | "ConsentRecorded"
+  | "ConsentWithdrawn"
+  | "RightsRequestSubmitted"
+  | "RightsRequestClosed"
+  | "ValidationCompleted"
+  | "ValidationFailed"
+  | "ViolationCreated"
+  | "ViolationClosed"
+  | "RemediationTaskAssigned"
+  | "RemediationCompleted"
+  | "EvidenceUploaded"
+  | "EvidenceApproved"
+  | "ReportRequested"
+  | "ReportGenerated"
+  | "SnapshotComputed"
+  | "NotificationSent"
+  | "NotificationFailed"
+  | "AiSummaryReady"
+  | "AiDraftReady"
+  | "UserLoggedIn"
+  | "PasswordResetRequested";
+
+export interface BaseDomainEvent<TPayload = Record<string, unknown>> {
+  eventId: string;
+  eventType: DomainEventName;
+  organizationId: string;
+  occurredAt: string;
+  actorUserId?: string;
+  correlationId?: string;
+  payload: TPayload;
+}
+
+export const DOMAIN_EVENTS = {
+  OrganizationCreated: "OrganizationCreated",
+  OrganizationOnboarded: "OrganizationOnboarded",
+  UserInvited: "UserInvited",
+  UserDeactivated: "UserDeactivated",
+  RoleAssigned: "RoleAssigned",
+  RolePermissionsChanged: "RolePermissionsChanged",
+  DepartmentCreated: "DepartmentCreated",
+  FrameworkPublished: "FrameworkPublished",
+  ControlAssigned: "ControlAssigned",
+  ControlUpdated: "ControlUpdated",
+  RequirementMapped: "RequirementMapped",
+  DataAssetCreated: "DataAssetCreated",
+  RetentionExpiringSoon: "RetentionExpiringSoon",
+  ConsentRecorded: "ConsentRecorded",
+  ConsentWithdrawn: "ConsentWithdrawn",
+  RightsRequestSubmitted: "RightsRequestSubmitted",
+  RightsRequestClosed: "RightsRequestClosed",
+  ValidationCompleted: "ValidationCompleted",
+  ValidationFailed: "ValidationFailed",
+  ViolationCreated: "ViolationCreated",
+  ViolationClosed: "ViolationClosed",
+  RemediationTaskAssigned: "RemediationTaskAssigned",
+  RemediationCompleted: "RemediationCompleted",
+  EvidenceUploaded: "EvidenceUploaded",
+  EvidenceApproved: "EvidenceApproved",
+  ReportRequested: "ReportRequested",
+  ReportGenerated: "ReportGenerated",
+  SnapshotComputed: "SnapshotComputed",
+  NotificationSent: "NotificationSent",
+  NotificationFailed: "NotificationFailed",
+  AiSummaryReady: "AiSummaryReady",
+  AiDraftReady: "AiDraftReady",
+  UserLoggedIn: "UserLoggedIn",
+  PasswordResetRequested: "PasswordResetRequested",
+} as const satisfies Record<DomainEventName, DomainEventName>;
