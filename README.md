@@ -80,3 +80,11 @@ See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` field
 | GET | `/api/v1/auth/me` | Bearer required |
 
 Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
+
+### Framework endpoints
+
+| Method | Path | Permission |
+|---|---|---|
+| POST | `/api/v1/framework/generate` | `framework:generate` |
+| GET | `/api/v1/framework/roadmap` | `framework:read` |
+| POST | `/api/v1/framework/publish` | `framework:publish` |
