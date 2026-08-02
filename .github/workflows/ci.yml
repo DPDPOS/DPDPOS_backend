@@ -54,3 +54,4 @@ jobs:
       - run: npm run prisma:seed
       - run: npm run build
       - run: npm test
+ 
