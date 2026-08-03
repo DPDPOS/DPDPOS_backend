@@ -37,55 +37,57 @@ enum ControlStatus {
 }
 
 model Organization {
-  id            String             @id @default(uuid()) @db.Uuid
-  name          String
-  industry      String?
-  companySize   String?            @map("company_size")
-  operatingRegion String?          @map("operating_region")
-  companyType   String?            @map("company_type")
-  maturityLevel String?            @map("maturity_level")
-  isSignificantDataFiduciary Boolean @default(false) @map("is_significant_data_fiduciary")
-  status        OrganizationStatus @default(ACTIVE)
-  createdBy     String?            @map("created_by") @db.Uuid
-  updatedBy     String?            @map("updated_by") @db.Uuid
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
-  deletedAt     DateTime?          @map("deleted_at")
+  id                         String             @id @default(uuid()) @db.Uuid
+  name                       String
+  industry                   String?
+  companySize                String?            @map("company_size")
+  operatingRegion            String?            @map("operating_region")
+  companyType                String?            @map("company_type")
+  maturityLevel              String?            @map("maturity_level")
+  isSignificantDataFiduciary Boolean            @default(false) @map("is_significant_data_fiduciary")
+  status                     OrganizationStatus @default(ACTIVE)
+  createdBy                  String?            @map("created_by") @db.Uuid
+  updatedBy                  String?            @map("updated_by") @db.Uuid
+  createdAt                  DateTime           @default(now()) @map("created_at")
+  updatedAt                  DateTime           @updatedAt @map("updated_at")
+  deletedAt                  DateTime?          @map("deleted_at")
 
-  users         User[]
-  roles         Role[]
-  departments   Department[]
-  frameworks    Framework[]
-  controls      Control[]
-  requirements  Requirement[]
+  users           User[]
+  roles           Role[]
+  departments     Department[]
+  frameworks      Framework[]
+  controls        Control[]
+  requirements    Requirement[]
   refreshSessions RefreshSession[]
-  outboxEvents  OutboxEvent[]
+  outboxEvents    OutboxEvent[]
+  dataAssets      DataAsset[]
 
   @@map("organizations")
 }
 
 model User {
-  id             String     @id @default(uuid()) @db.Uuid
-  organizationId String     @map("organization_id") @db.Uuid
-  email          String
-  name           String
-  passwordHash   String?    @map("password_hash")
-  status         UserStatus @default(INVITED)
-  mfaEnabled     Boolean    @default(false) @map("mfa_enabled")
-  mfaSecretEnc   String?    @map("mfa_secret_enc")
-  inviteTokenHash String?   @map("invite_token_hash")
-  inviteExpiresAt DateTime? @map("invite_expires_at")
-  lastLoginAt    DateTime?  @map("last_login_at")
-  createdBy      String?    @map("created_by") @db.Uuid
-  updatedBy      String?    @map("updated_by") @db.Uuid
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  deletedAt      DateTime?  @map("deleted_at")
+  id              String     @id @default(uuid()) @db.Uuid
+  organizationId  String     @map("organization_id") @db.Uuid
+  email           String
+  name            String
+  passwordHash    String?    @map("password_hash")
+  status          UserStatus @default(INVITED)
+  mfaEnabled      Boolean    @default(false) @map("mfa_enabled")
+  mfaSecretEnc    String?    @map("mfa_secret_enc")
+  inviteTokenHash String?    @map("invite_token_hash")
+  inviteExpiresAt DateTime?  @map("invite_expires_at")
+  lastLoginAt     DateTime?  @map("last_login_at")
+  createdBy       String?    @map("created_by") @db.Uuid
+  updatedBy       String?    @map("updated_by") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  userRoles      UserRole[]
-  headedDepartments Department[] @relation("DepartmentHead")
-  refreshSessions RefreshSession[]
+  organization      Organization     @relation(fields: [organizationId], references: [id])
+  userRoles         UserRole[]
+  headedDepartments Department[]     @relation("DepartmentHead")
+  refreshSessions   RefreshSession[]
+  ownedDataAssets   DataAsset[]      @relation("DataAssetOwner")
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
@@ -94,20 +96,20 @@ model User {
 }
 
 model Role {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
   name           String
   description    String?
-  permissions    String[] @default([])
-  isSystemRole   Boolean  @default(false) @map("is_system_role")
-  createdBy      String?  @map("created_by") @db.Uuid
-  updatedBy      String?  @map("updated_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  permissions    String[]  @default([])
+  isSystemRole   Boolean   @default(false) @map("is_system_role")
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  userRoles      UserRole[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  userRoles    UserRole[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -131,18 +133,19 @@ model UserRole {
 }
 
 model Department {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
   name           String
-  headUserId     String?  @map("head_user_id") @db.Uuid
-  createdBy      String?  @map("created_by") @db.Uuid
-  updatedBy      String?  @map("updated_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  headUserId     String?   @map("head_user_id") @db.Uuid
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id])
   headUser     User?        @relation("DepartmentHead", fields: [headUserId], references: [id])
+  dataAssets   DataAsset[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -150,22 +153,22 @@ model Department {
 }
 
 model Framework {
-  id             String          @id @default(uuid()) @db.Uuid
-  organizationId String          @map("organization_id") @db.Uuid
-  name           String
-  status         FrameworkStatus @default(DRAFT)
-  industryProfile String?        @map("industry_profile")
-  maturityLevel  String?         @map("maturity_level")
-  isSdf          Boolean         @default(false) @map("is_sdf")
-  roadmapJson    Json?           @map("roadmap_json")
-  publishedAt    DateTime?       @map("published_at")
-  createdBy      String?         @map("created_by") @db.Uuid
-  updatedBy      String?         @map("updated_by") @db.Uuid
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  deletedAt      DateTime?       @map("deleted_at")
+  id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @map("organization_id") @db.Uuid
+  name            String
+  status          FrameworkStatus @default(DRAFT)
+  industryProfile String?         @map("industry_profile")
+  maturityLevel   String?         @map("maturity_level")
+  isSdf           Boolean         @default(false) @map("is_sdf")
+  roadmapJson     Json?           @map("roadmap_json")
+  publishedAt     DateTime?       @map("published_at")
+  createdBy       String?         @map("created_by") @db.Uuid
+  updatedBy       String?         @map("updated_by") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
   controls     Control[]
   requirements Requirement[]
 
@@ -190,8 +193,8 @@ model Control {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  framework    Framework    @relation(fields: [frameworkId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  framework    Framework     @relation(fields: [frameworkId], references: [id])
   requirements Requirement[]
 
   @@unique([frameworkId, code])
@@ -200,18 +203,18 @@ model Control {
 }
 
 model Requirement {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  frameworkId    String   @map("framework_id") @db.Uuid
-  controlId      String?  @map("control_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  frameworkId    String    @map("framework_id") @db.Uuid
+  controlId      String?   @map("control_id") @db.Uuid
   code           String
   title          String
   description    String?
-  legalBasisRef  String?  @map("legal_basis_ref")
-  createdBy      String?  @map("created_by") @db.Uuid
-  updatedBy      String?  @map("updated_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  legalBasisRef  String?   @map("legal_basis_ref")
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -273,3 +276,57 @@ model OutboxEvent {
 //   violations, remediation_tasks, evidence_files, reports, notifications,
 //   ai_usage_logs, audit_logs
 // =============================================================================
+
+// =============================================================================
+// Developer B — Inventory
+// =============================================================================
+
+enum DataAssetStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum DataSensitivity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model DataAsset {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String  @map("organization_id") @db.Uuid
+  departmentId   String? @map("department_id") @db.Uuid
+  ownerUserId    String? @map("owner_user_id") @db.Uuid
+
+  assetName   String          @map("asset_name")
+  assetType   String          @map("asset_type")
+  category    String
+  sensitivity DataSensitivity
+
+  description String?
+
+  storageLocation String? @map("storage_location")
+  retentionPeriod String? @map("retention_period")
+
+  status DataAssetStatus @default(ACTIVE)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  owner User? @relation("DataAssetOwner", fields: [ownerUserId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([departmentId])
+  @@map("data_assets")
+}

@@ -11,6 +11,7 @@ import { createDepartmentsRouter } from "../modules/departments/routes/departmen
 import { createFrameworkRouter } from "../modules/framework/routes/framework.routes.js";
 import { createControlsRouter } from "../modules/controls/routes/control.routes.js";
 import { createRequirementsRouter } from "../modules/requirements/routes/requirement.routes.js";
+import { createDataAssetRouter } from "../modules/inventory/routes/data-asset.routes.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -39,4 +40,5 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/framework`, createFrameworkRouter());
   app.use(`${v1}/controls`, createControlsRouter());
   app.use(`${v1}/requirements`, createRequirementsRouter());
+  app.use(`${v1}/data-assets`, createDataAssetRouter());
 }
