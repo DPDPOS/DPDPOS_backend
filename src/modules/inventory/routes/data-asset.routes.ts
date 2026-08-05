@@ -8,19 +8,13 @@ import {
 import { requirePermission } from "../../../shared/guards/permission.guard.js";
 
 import { dataAssetController } from "../controllers/data-asset.controller.js";
+import { dataAssetPermissions } from "../permissions/data-asset.permissions.js";
 
 import {
   createDataAssetDtoSchema,
   updateDataAssetDtoSchema,
   dataAssetIdParamSchema,
 } from "../dto/data-asset.dto.js";
-
-export const dataAssetPermissions = {
-  read: "DATA_ASSET_READ",
-  create: "DATA_ASSET_CREATE",
-  update: "DATA_ASSET_UPDATE",
-  delete: "DATA_ASSET_DELETE",
-} as const;
 
 export function createDataAssetRouter(): Router {
   const router = Router();

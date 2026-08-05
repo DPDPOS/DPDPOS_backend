@@ -14,6 +14,7 @@ export type DomainEventName =
   | "RetentionExpiringSoon"
   | "ConsentRecorded"
   | "ConsentWithdrawn"
+  | "ProcessingActivityCreated"
   | "RightsRequestSubmitted"
   | "RightsRequestClosed"
   | "ValidationCompleted"
@@ -60,6 +61,7 @@ export const DOMAIN_EVENTS = {
   RetentionExpiringSoon: "RetentionExpiringSoon",
   ConsentRecorded: "ConsentRecorded",
   ConsentWithdrawn: "ConsentWithdrawn",
+  ProcessingActivityCreated: "ProcessingActivityCreated",
   RightsRequestSubmitted: "RightsRequestSubmitted",
   RightsRequestClosed: "RightsRequestClosed",
   ValidationCompleted: "ValidationCompleted",

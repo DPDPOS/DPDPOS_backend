@@ -38,7 +38,12 @@ export const PERMISSIONS = {
   // inventory (Dev B)
   DATA_ASSET_CREATE: "data_asset:create",
   DATA_ASSET_READ: "data_asset:read",
+  DATA_ASSET_UPDATE: "data_asset:update",
+  DATA_ASSET_DELETE: "data_asset:delete",
+  PROCESSING_ACTIVITY_CREATE: "processing_activity:create",
   PROCESSING_ACTIVITY_READ: "processing_activity:read",
+  PROCESSING_ACTIVITY_UPDATE: "processing_activity:update",
+  PROCESSING_ACTIVITY_DELETE: "processing_activity:delete",
 
   // consent (Dev B)
   NOTICE_READ: "notice:read",
@@ -135,6 +140,7 @@ export const SYSTEM_ROLE_PRESETS: Record<string, Permission[]> = {
     PERMISSIONS.REQUIREMENT_READ,
     PERMISSIONS.DATA_ASSET_CREATE,
     PERMISSIONS.DATA_ASSET_READ,
+    PERMISSIONS.PROCESSING_ACTIVITY_CREATE,
     PERMISSIONS.PROCESSING_ACTIVITY_READ,
     PERMISSIONS.NOTICE_READ,
     PERMISSIONS.CONSENT_CREATE,

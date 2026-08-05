@@ -12,6 +12,7 @@ import { createFrameworkRouter } from "../modules/framework/routes/framework.rou
 import { createControlsRouter } from "../modules/controls/routes/control.routes.js";
 import { createRequirementsRouter } from "../modules/requirements/routes/requirement.routes.js";
 import { createDataAssetRouter } from "../modules/inventory/routes/data-asset.routes.js";
+import { createProcessingActivityRouter } from "../modules/inventory/routes/processing-activity.routes.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -41,4 +42,5 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/controls`, createControlsRouter());
   app.use(`${v1}/requirements`, createRequirementsRouter());
   app.use(`${v1}/data-assets`, createDataAssetRouter());
+  app.use(`${v1}/processing-activities`, createProcessingActivityRouter());
 }

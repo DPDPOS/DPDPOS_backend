@@ -52,15 +52,16 @@ model Organization {
   updatedAt                  DateTime           @updatedAt @map("updated_at")
   deletedAt                  DateTime?          @map("deleted_at")
 
-  users           User[]
-  roles           Role[]
-  departments     Department[]
-  frameworks      Framework[]
-  controls        Control[]
-  requirements    Requirement[]
-  refreshSessions RefreshSession[]
-  outboxEvents    OutboxEvent[]
-  dataAssets      DataAsset[]
+  users                User[]
+  roles                Role[]
+  departments          Department[]
+  frameworks           Framework[]
+  controls             Control[]
+  requirements         Requirement[]
+  refreshSessions      RefreshSession[]
+  outboxEvents         OutboxEvent[]
+  dataAssets           DataAsset[]
+  processingActivities ProcessingActivity[]
 
   @@map("organizations")
 }
@@ -325,8 +326,40 @@ model DataAsset {
 
   owner User? @relation("DataAssetOwner", fields: [ownerUserId], references: [id])
 
+  processingActivities ProcessingActivity[]
+
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([departmentId])
   @@map("data_assets")
+}
+
+model ProcessingActivity {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  dataAssetId    String @map("data_asset_id") @db.Uuid
+
+  purpose       String
+  sourceSystem  String? @map("source_system")
+  recipientType String? @map("recipient_type")
+  processorName String? @map("processor_name")
+  legalBasis    String? @map("legal_basis")
+  retentionRule String? @map("retention_rule")
+  notes         String?
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  dataAsset DataAsset @relation(fields: [dataAssetId], references: [id])
+
+  @@index([organizationId])
+  @@index([dataAssetId])
+  @@map("processing_activities")
 }
