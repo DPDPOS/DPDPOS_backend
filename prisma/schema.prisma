@@ -69,6 +69,11 @@ model Organization {
   validationRuns       ValidationRun[]
   validationResults    ValidationResult[]
   violations           Violation[]
+  evidenceFiles        EvidenceFile[]
+  auditLogs            AuditLog[]
+  reports              Report[]
+  notifications        Notification[]
+  aiUsageLogs          AiUsageLog[]
 
   @@map("organizations")
 }
@@ -206,6 +211,7 @@ model Control {
   organization Organization  @relation(fields: [organizationId], references: [id])
   framework    Framework     @relation(fields: [frameworkId], references: [id])
   requirements Requirement[]
+  evidenceFiles EvidenceFile[]
 
   @@unique([frameworkId, code])
   @@index([organizationId, frameworkId])
@@ -682,9 +688,257 @@ model Violation {
 
   assignee User? @relation("ViolationAssignee", fields: [assignedTo], references: [id])
 
+  evidenceFiles EvidenceFile[]
+
   @@unique([organizationId, validationResultId])
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([assignedTo])
   @@map("violations")
+}
+
+// =============================================================================
+// Developer C — Evidence
+// =============================================================================
+
+enum EvidenceStatus {
+  UPLOADED
+  TAGGED
+  MAPPED
+  UNDER_REVIEW
+  APPROVED
+  LOCKED
+}
+
+model EvidenceFile {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  fileName     String         @map("file_name")
+  storageKey   String         @map("storage_key")
+  mimeType     String         @map("mime_type")
+  fileHash     String?        @map("file_hash")
+  fileSizeBytes Int?          @map("file_size_bytes")
+  description  String?
+  tags         String[]       @default([])
+  status       EvidenceStatus @default(UPLOADED)
+
+  controlId   String? @map("control_id") @db.Uuid
+  violationId String? @map("violation_id") @db.Uuid
+
+  uploadedBy  String? @map("uploaded_by") @db.Uuid
+  reviewedBy  String? @map("reviewed_by") @db.Uuid
+  approvedBy  String? @map("approved_by") @db.Uuid
+  lockedAt    DateTime? @map("locked_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  control      Control?     @relation(fields: [controlId], references: [id])
+  violation    Violation?   @relation(fields: [violationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([controlId])
+  @@index([violationId])
+  @@map("evidence_files")
+}
+
+// =============================================================================
+// Developer C — Audit
+// =============================================================================
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  actorUserId   String  @map("actor_user_id") @db.Uuid
+  actionType    String  @map("action_type")
+  entityType    String  @map("entity_type")
+  entityId      String  @map("entity_id")
+  beforeJson    Json?   @map("before_json")
+  afterJson     Json?   @map("after_json")
+  ipAddress     String? @map("ip_address")
+  userAgent     String? @map("user_agent")
+  correlationId String? @map("correlation_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, actionType])
+  @@index([organizationId, actorUserId])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// Developer C — Reports
+// =============================================================================
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum ReportFormat {
+  PDF
+  CSV
+  EXCEL
+}
+
+enum ReportType {
+  COMPLIANCE_SUMMARY
+  BOARD_PACK
+  VIOLATION_REPORT
+  EVIDENCE_REPORT
+  VALIDATION_REPORT
+  CONSENT_REPORT
+  RIGHTS_REPORT
+  AUDIT_REPORT
+}
+
+model Report {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  reportType   ReportType   @map("report_type")
+  title        String
+  status       ReportStatus @default(PENDING)
+  format       ReportFormat @default(PDF)
+  generatedBy  String       @map("generated_by") @db.Uuid
+  storageKey   String?      @map("storage_key")
+  parameters   Json?
+  startedAt    DateTime?    @map("started_at")
+  completedAt  DateTime?    @map("completed_at")
+  errorMessage String?      @map("error_message")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, reportType])
+  @@map("reports")
+}
+
+// =============================================================================
+// Developer C — Notifications
+// =============================================================================
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  SLACK
+  TEAMS
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId   String             @map("organization_id") @db.Uuid
+  recipientUserId  String             @map("recipient_user_id") @db.Uuid
+  notificationType String             @map("notification_type")
+  channel          NotificationChannel @default(IN_APP)
+  subject          String
+  body             String
+  status           NotificationStatus @default(PENDING)
+  sentAt           DateTime?          @map("sent_at")
+  readAt           DateTime?          @map("read_at")
+  relatedEntityType String?           @map("related_entity_type")
+  relatedEntityId   String?           @map("related_entity_id")
+  retryCount       Int                @default(0) @map("retry_count")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([recipientUserId])
+  @@index([recipientUserId, status])
+  @@index([organizationId, notificationType])
+  @@map("notifications")
+}
+
+// =============================================================================
+// Developer C — AI Usage Logs
+// =============================================================================
+
+enum AiUseCase {
+  SUMMARIZE
+  DRAFT
+  EXPLAIN
+  SEARCH
+}
+
+enum AiRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model AiUsageLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String        @map("organization_id") @db.Uuid
+  requestedBy    String        @map("requested_by") @db.Uuid
+  useCase        AiUseCase     @map("use_case")
+  module         String
+  entityType     String?       @map("entity_type")
+  entityId       String?       @map("entity_id")
+  promptVersion  String        @default("v1") @map("prompt_version")
+  promptText     String?       @map("prompt_text") @db.Text
+  resultText     String?       @map("result_text") @db.Text
+  tokensIn       Int           @default(0) @map("tokens_in")
+  tokensOut      Int           @default(0) @map("tokens_out")
+  latencyMs      Int?          @map("latency_ms")
+  estimatedCost  Float?        @map("estimated_cost")
+  status         AiRequestStatus @default(PENDING)
+  errorMessage   String?       @map("error_message")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, useCase])
+  @@index([organizationId, status])
+  @@map("ai_usage_logs")
 }
