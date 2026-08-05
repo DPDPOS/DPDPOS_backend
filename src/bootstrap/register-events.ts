@@ -10,6 +10,7 @@ import {
   onValidationFailedNotify,
   onReportGeneratedNotify,
 } from "../modules/notifications/index.js";
+import { onViolationCreated } from "../modules/remediation/events/handlers/violation-created.handler.js";
 
 /**
  * Event subscriber registration — consumers register handlers here at boot.
@@ -31,6 +32,9 @@ export function registerEventSubscribers(): void {
   registerEventHandler(DOMAIN_EVENTS.RightsRequestSubmitted, onRightsRequestNotify);
   registerEventHandler(DOMAIN_EVENTS.ValidationFailed, onValidationFailedNotify);
   registerEventHandler(DOMAIN_EVENTS.ReportGenerated, onReportGeneratedNotify);
+
+  // Developer B — remediation auto-task on violation creation
+  registerEventHandler(DOMAIN_EVENTS.ViolationCreated, onViolationCreated);
 
   logger.info("events.subscribers.ready");
 }

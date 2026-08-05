@@ -17,6 +17,7 @@ import { createConsentRouter } from "../modules/consent/routes/consent.routes.js
 import { createDataSubjectRequestRouter } from "../modules/rights/routes/data-subject-request.routes.js";
 import { createValidationRouter } from "../modules/validations/routes/validation.routes.js";
 import { createViolationRouter } from "../modules/violations/routes/violation.routes.js";
+import { createRemediationTaskRouter } from "../modules/remediation/routes/remediation-task.routes.js";
 
 // Developer C modules
 import { createAuditRouter } from "../modules/audit/index.js";
@@ -59,6 +60,7 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/data-subject-requests`, createDataSubjectRequestRouter());
   app.use(`${v1}`, createValidationRouter());
   app.use(`${v1}/violations`, createViolationRouter());
+  app.use(`${v1}/remediation-tasks`, createRemediationTaskRouter());
 
   // Developer C routes
   app.use(`${v1}/audit`, createAuditRouter());

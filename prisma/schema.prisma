@@ -74,6 +74,7 @@ model Organization {
   reports              Report[]
   notifications        Notification[]
   aiUsageLogs          AiUsageLog[]
+  remediationTasks     RemediationTask[]
 
   @@map("organizations")
 }
@@ -96,13 +97,14 @@ model User {
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
 
-  organization      Organization     @relation(fields: [organizationId], references: [id])
-  userRoles         UserRole[]
-  headedDepartments Department[]     @relation("DepartmentHead")
-  refreshSessions   RefreshSession[]
-  ownedDataAssets   DataAsset[]      @relation("DataAssetOwner")
-  assignedRequests  DataSubjectRequest[] @relation("DataSubjectRequestAssignee")
-  assignedViolations Violation[]         @relation("ViolationAssignee")
+  organization             Organization         @relation(fields: [organizationId], references: [id])
+  userRoles                UserRole[]
+  headedDepartments        Department[]         @relation("DepartmentHead")
+  refreshSessions          RefreshSession[]
+  ownedDataAssets          DataAsset[]          @relation("DataAssetOwner")
+  assignedRequests         DataSubjectRequest[] @relation("DataSubjectRequestAssignee")
+  assignedViolations       Violation[]          @relation("ViolationAssignee")
+  assignedRemediationTasks RemediationTask[]    @relation("RemediationTaskAssignee")
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
@@ -208,9 +210,9 @@ model Control {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  framework    Framework     @relation(fields: [frameworkId], references: [id])
-  requirements Requirement[]
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  framework     Framework      @relation(fields: [frameworkId], references: [id])
+  requirements  Requirement[]
   evidenceFiles EvidenceFile[]
 
   @@unique([frameworkId, code])
@@ -342,7 +344,7 @@ model DataAsset {
   owner User? @relation("DataAssetOwner", fields: [ownerUserId], references: [id])
 
   processingActivities ProcessingActivity[]
-  consentRecords      ConsentRecord[]
+  consentRecords       ConsentRecord[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -395,10 +397,10 @@ model Notice {
   organizationId String @map("organization_id") @db.Uuid
 
   title         String
-  version       Int      @default(1)
+  version       Int       @default(1)
   content       String
   effectiveFrom DateTime? @map("effective_from")
-  publishedBy   String?  @map("published_by") @db.Uuid
+  publishedBy   String?   @map("published_by") @db.Uuid
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -419,10 +421,10 @@ model Notice {
 model ConsentRecord {
   id String @id @default(uuid()) @db.Uuid
 
-  organizationId       String       @map("organization_id") @db.Uuid
-  dataSubjectIdentifier String      @map("data_subject_identifier")
-  noticeId             String?      @map("notice_id") @db.Uuid
-  dataAssetId          String?      @map("data_asset_id") @db.Uuid
+  organizationId        String  @map("organization_id") @db.Uuid
+  dataSubjectIdentifier String  @map("data_subject_identifier")
+  noticeId              String? @map("notice_id") @db.Uuid
+  dataAssetId           String? @map("data_asset_id") @db.Uuid
 
   purpose      String
   consentState ConsentState @default(GRANTED) @map("consent_state")
@@ -478,10 +480,10 @@ model DataSubjectRequest {
 
   organizationId String @map("organization_id") @db.Uuid
 
-  requestType        DataSubjectRequestType @map("request_type")
-  requesterReference String                 @map("requester_reference")
+  requestType        DataSubjectRequestType   @map("request_type")
+  requesterReference String                   @map("requester_reference")
   status             DataSubjectRequestStatus @default(SUBMITTED)
-  assignedTo         String?                @map("assigned_to") @db.Uuid
+  assignedTo         String?                  @map("assigned_to") @db.Uuid
 
   openedAt DateTime  @default(now()) @map("opened_at")
   dueAt    DateTime? @map("due_at")
@@ -583,12 +585,12 @@ model ValidationRun {
 
   organizationId String @map("organization_id") @db.Uuid
 
-  triggerType  ValidationTriggerType @map("trigger_type")
-  triggeredBy  String?               @map("triggered_by") @db.Uuid
-  status       ValidationRunStatus   @default(PENDING)
-  startedAt    DateTime              @default(now()) @map("started_at")
-  finishedAt   DateTime?             @map("finished_at")
-  durationMs   Int?                  @map("duration_ms")
+  triggerType ValidationTriggerType @map("trigger_type")
+  triggeredBy String?               @map("triggered_by") @db.Uuid
+  status      ValidationRunStatus   @default(PENDING)
+  startedAt   DateTime              @default(now()) @map("started_at")
+  finishedAt  DateTime?             @map("finished_at")
+  durationMs  Int?                  @map("duration_ms")
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -597,7 +599,7 @@ model ValidationRun {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   results ValidationResult[]
 
@@ -613,12 +615,12 @@ model ValidationResult {
   runId          String @map("run_id") @db.Uuid
   ruleId         String @map("rule_id") @db.Uuid
 
-  ruleCode      String @map("rule_code")
-  resultStatus  ValidationResultStatus @map("result_status")
-  explanation   String?
-  score         Int?
-  evidenceRequiredFlag Boolean @default(false) @map("evidence_required_flag")
-  controlId     String? @map("control_id") @db.Uuid
+  ruleCode             String                 @map("rule_code")
+  resultStatus         ValidationResultStatus @map("result_status")
+  explanation          String?
+  score                Int?
+  evidenceRequiredFlag Boolean                @default(false) @map("evidence_required_flag")
+  controlId            String?                @map("control_id") @db.Uuid
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -627,8 +629,8 @@ model ValidationResult {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  run          ValidationRun @relation(fields: [runId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  run          ValidationRun  @relation(fields: [runId], references: [id])
   rule         ValidationRule @relation(fields: [ruleId], references: [id])
 
   violations Violation[]
@@ -659,18 +661,18 @@ model Violation {
 
   organizationId String @map("organization_id") @db.Uuid
 
-  validationResultId String? @map("validation_result_id") @db.Uuid
+  validationResultId String?         @map("validation_result_id") @db.Uuid
   severity           RuleSeverity
   title              String
   description        String?
   status             ViolationStatus @default(OPEN)
   assignedTo         String?         @map("assigned_to") @db.Uuid
 
-  openedAt  DateTime  @default(now()) @map("opened_at")
-  dueAt     DateTime? @map("due_at")
-  closedAt  DateTime? @map("closed_at")
+  openedAt DateTime  @default(now()) @map("opened_at")
+  dueAt    DateTime? @map("due_at")
+  closedAt DateTime? @map("closed_at")
 
-  resolutionSummary   String? @map("resolution_summary")
+  resolutionSummary    String? @map("resolution_summary")
   evidenceRequiredFlag Boolean @default(false) @map("evidence_required_flag")
 
   version Int @default(1)
@@ -688,13 +690,80 @@ model Violation {
 
   assignee User? @relation("ViolationAssignee", fields: [assignedTo], references: [id])
 
-  evidenceFiles EvidenceFile[]
+  evidenceFiles    EvidenceFile[]
+  remediationTasks RemediationTask[]
 
   @@unique([organizationId, validationResultId])
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([assignedTo])
   @@map("violations")
+}
+
+// =============================================================================
+// Developer B — Remediation
+// =============================================================================
+
+enum RemediationTaskStatus {
+  PENDING
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  VERIFIED
+  CLOSED
+  CANCELLED
+}
+
+enum RemediationTaskSource {
+  AUTO
+  MANUAL
+}
+
+model RemediationTask {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  violationId    String @map("violation_id") @db.Uuid
+
+  /**
+   * AUTO = created from a ViolationCreated event; MANUAL = user-created.
+   */
+  source RemediationTaskSource @default(MANUAL)
+
+  taskTitle       String                @map("task_title")
+  taskDescription String?               @map("task_description")
+  status          RemediationTaskStatus @default(PENDING)
+  assignedTo      String?               @map("assigned_to") @db.Uuid
+
+  dueAt      DateTime? @map("due_at")
+  verifiedAt DateTime? @map("verified_at")
+  verifiedBy String?   @map("verified_by") @db.Uuid
+  closedAt   DateTime? @map("closed_at")
+
+  verificationNotes String? @map("verification_notes")
+  resolutionSummary String? @map("resolution_summary")
+
+  version Int @default(1)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  violation    Violation    @relation(fields: [violationId], references: [id])
+  assignee     User?        @relation("RemediationTaskAssignee", fields: [assignedTo], references: [id])
+
+  // NOTE: the at-most-one-AUTO-task-per-violation invariant is enforced by a
+  // PARTIAL unique index in the migration SQL (Prisma cannot express partial
+  // indexes). Do not add a full @@unique here or manual multi-task creation
+  // per violation would be blocked.
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([assignedTo])
+  @@index([violationId])
+  @@map("remediation_tasks")
 }
 
 // =============================================================================
@@ -715,23 +784,23 @@ model EvidenceFile {
 
   organizationId String @map("organization_id") @db.Uuid
 
-  fileName     String         @map("file_name")
-  storageKey   String         @map("storage_key")
-  mimeType     String         @map("mime_type")
-  fileHash     String?        @map("file_hash")
-  fileSizeBytes Int?          @map("file_size_bytes")
-  description  String?
-  tags         String[]       @default([])
-  status       EvidenceStatus @default(UPLOADED)
+  fileName      String         @map("file_name")
+  storageKey    String         @map("storage_key")
+  mimeType      String         @map("mime_type")
+  fileHash      String?        @map("file_hash")
+  fileSizeBytes Int?           @map("file_size_bytes")
+  description   String?
+  tags          String[]       @default([])
+  status        EvidenceStatus @default(UPLOADED)
 
   controlId   String? @map("control_id") @db.Uuid
   violationId String? @map("violation_id") @db.Uuid
 
-  uploadedBy  String? @map("uploaded_by") @db.Uuid
-  reviewedBy  String? @map("reviewed_by") @db.Uuid
-  approvedBy  String? @map("approved_by") @db.Uuid
-  lockedAt    DateTime? @map("locked_at")
-  expiresAt   DateTime? @map("expires_at")
+  uploadedBy String?   @map("uploaded_by") @db.Uuid
+  reviewedBy String?   @map("reviewed_by") @db.Uuid
+  approvedBy String?   @map("approved_by") @db.Uuid
+  lockedAt   DateTime? @map("locked_at")
+  expiresAt  DateTime? @map("expires_at")
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -863,18 +932,18 @@ enum NotificationStatus {
 model Notification {
   id String @id @default(uuid()) @db.Uuid
 
-  organizationId   String             @map("organization_id") @db.Uuid
-  recipientUserId  String             @map("recipient_user_id") @db.Uuid
-  notificationType String             @map("notification_type")
-  channel          NotificationChannel @default(IN_APP)
-  subject          String
-  body             String
-  status           NotificationStatus @default(PENDING)
-  sentAt           DateTime?          @map("sent_at")
-  readAt           DateTime?          @map("read_at")
-  relatedEntityType String?           @map("related_entity_type")
-  relatedEntityId   String?           @map("related_entity_id")
-  retryCount       Int                @default(0) @map("retry_count")
+  organizationId    String              @map("organization_id") @db.Uuid
+  recipientUserId   String              @map("recipient_user_id") @db.Uuid
+  notificationType  String              @map("notification_type")
+  channel           NotificationChannel @default(IN_APP)
+  subject           String
+  body              String
+  status            NotificationStatus  @default(PENDING)
+  sentAt            DateTime?           @map("sent_at")
+  readAt            DateTime?           @map("read_at")
+  relatedEntityType String?             @map("related_entity_type")
+  relatedEntityId   String?             @map("related_entity_id")
+  retryCount        Int                 @default(0) @map("retry_count")
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -913,27 +982,27 @@ enum AiRequestStatus {
 model AiUsageLog {
   id String @id @default(uuid()) @db.Uuid
 
-  organizationId String        @map("organization_id") @db.Uuid
-  requestedBy    String        @map("requested_by") @db.Uuid
-  useCase        AiUseCase     @map("use_case")
+  organizationId String          @map("organization_id") @db.Uuid
+  requestedBy    String          @map("requested_by") @db.Uuid
+  useCase        AiUseCase       @map("use_case")
   module         String
-  entityType     String?       @map("entity_type")
-  entityId       String?       @map("entity_id")
-  promptVersion  String        @default("v1") @map("prompt_version")
-  promptText     String?       @map("prompt_text") @db.Text
-  resultText     String?       @map("result_text") @db.Text
-  tokensIn       Int           @default(0) @map("tokens_in")
-  tokensOut      Int           @default(0) @map("tokens_out")
-  latencyMs      Int?          @map("latency_ms")
-  estimatedCost  Float?        @map("estimated_cost")
+  entityType     String?         @map("entity_type")
+  entityId       String?         @map("entity_id")
+  promptVersion  String          @default("v1") @map("prompt_version")
+  promptText     String?         @map("prompt_text") @db.Text
+  resultText     String?         @map("result_text") @db.Text
+  tokensIn       Int             @default(0) @map("tokens_in")
+  tokensOut      Int             @default(0) @map("tokens_out")
+  latencyMs      Int?            @map("latency_ms")
+  estimatedCost  Float?          @map("estimated_cost")
   status         AiRequestStatus @default(PENDING)
-  errorMessage   String?       @map("error_message")
+  errorMessage   String?         @map("error_message")
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
