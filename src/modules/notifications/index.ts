@@ -1,1 +1,10 @@
-export const notificationsModule = { name: "notifications", owner: "Developer C" } as const;
+export { createNotificationRouter } from "./routes/notification.routes.js";
+export { NotificationService, notificationService } from "./services/notification.service.js";
+export {
+  onViolationCreatedNotify,
+  onEvidenceApprovedNotify,
+  onRightsRequestNotify,
+  onValidationFailedNotify,
+  onReportGeneratedNotify
+} from "./events/handlers/notification-event.handler.js";
+export { startNotificationWorker, stopNotificationWorker } from "./jobs/notification.worker.js";
