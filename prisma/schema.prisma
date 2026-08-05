@@ -68,6 +68,7 @@ model Organization {
   validationRules      ValidationRule[]
   validationRuns       ValidationRun[]
   validationResults    ValidationResult[]
+  violations           Violation[]
 
   @@map("organizations")
 }
@@ -96,6 +97,7 @@ model User {
   refreshSessions   RefreshSession[]
   ownedDataAssets   DataAsset[]      @relation("DataAssetOwner")
   assignedRequests  DataSubjectRequest[] @relation("DataSubjectRequestAssignee")
+  assignedViolations Violation[]         @relation("ViolationAssignee")
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
@@ -623,8 +625,66 @@ model ValidationResult {
   run          ValidationRun @relation(fields: [runId], references: [id])
   rule         ValidationRule @relation(fields: [ruleId], references: [id])
 
+  violations Violation[]
+
   @@unique([runId, ruleId])
   @@index([organizationId])
   @@index([runId])
   @@map("validation_results")
+}
+
+// =============================================================================
+// Developer B — Violations
+// =============================================================================
+
+enum ViolationStatus {
+  OPEN
+  TRIAGE
+  ASSIGNED
+  IN_PROGRESS
+  PENDING_EVIDENCE
+  VALIDATED
+  CLOSED
+  ARCHIVED
+}
+
+model Violation {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  validationResultId String? @map("validation_result_id") @db.Uuid
+  severity           RuleSeverity
+  title              String
+  description        String?
+  status             ViolationStatus @default(OPEN)
+  assignedTo         String?         @map("assigned_to") @db.Uuid
+
+  openedAt  DateTime  @default(now()) @map("opened_at")
+  dueAt     DateTime? @map("due_at")
+  closedAt  DateTime? @map("closed_at")
+
+  resolutionSummary   String? @map("resolution_summary")
+  evidenceRequiredFlag Boolean @default(false) @map("evidence_required_flag")
+
+  version Int @default(1)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  validationResult ValidationResult? @relation(fields: [validationResultId], references: [id])
+
+  assignee User? @relation("ViolationAssignee", fields: [assignedTo], references: [id])
+
+  @@unique([organizationId, validationResultId])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([assignedTo])
+  @@map("violations")
 }

@@ -16,6 +16,7 @@ import { createProcessingActivityRouter } from "../modules/inventory/routes/proc
 import { createConsentRouter } from "../modules/consent/routes/consent.routes.js";
 import { createDataSubjectRequestRouter } from "../modules/rights/routes/data-subject-request.routes.js";
 import { createValidationRouter } from "../modules/validations/routes/validation.routes.js";
+import { createViolationRouter } from "../modules/violations/routes/violation.routes.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -49,4 +50,5 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}`, createConsentRouter());
   app.use(`${v1}/data-subject-requests`, createDataSubjectRequestRouter());
   app.use(`${v1}`, createValidationRouter());
+  app.use(`${v1}/violations`, createViolationRouter());
 }

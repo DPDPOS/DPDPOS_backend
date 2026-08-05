@@ -4,6 +4,7 @@ import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 
+import { SYSTEM_ACTOR_ID } from "../../../shared/constants/system-actor.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
 import { ValidationRunRepository } from "../repositories/validation-run.repository.js";
@@ -34,12 +35,7 @@ import {
   type ValidationRunResponse,
 } from "../types/validation-run.types.js";
 
-/**
- * Sentinel actor for runs triggered outside a user session (scheduled jobs).
- * A valid-UUID sentinel so audit columns stay type-safe and queries can filter
- * system-triggered activity.
- */
-export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+export { SYSTEM_ACTOR_ID };
 
 /** Terminal run states that must not be re-executed (idempotency guard). */
 const TERMINAL_RUN_STATUSES = new Set(["COMPLETED", "PARTIAL"]);
@@ -150,7 +146,7 @@ export class ValidationExecutionService {
 
       await withTransaction(async (tx) => {
         for (const evalResult of evaluations) {
-          await this.results.upsert(tx, ctx, {
+          const result = await this.results.upsert(tx, ctx, {
             runId: run.id,
             ruleId: evalResult.rule.id,
             ruleCode: evalResult.rule.ruleCode,
@@ -171,6 +167,7 @@ export class ValidationExecutionService {
                 runId: run.id,
                 ruleCode: evalResult.rule.ruleCode,
                 ruleId: evalResult.rule.id,
+                resultId: result.id,
                 score: evalResult.score ?? 100,
               },
             });
@@ -184,6 +181,7 @@ export class ValidationExecutionService {
                 runId: run.id,
                 ruleCode: evalResult.rule.ruleCode,
                 ruleId: evalResult.rule.id,
+                resultId: result.id,
                 severity: evalResult.rule.severity,
                 evidenceRequiredFlag: evalResult.evidenceRequired ?? false,
                 explanation: evalResult.explanation ?? "",

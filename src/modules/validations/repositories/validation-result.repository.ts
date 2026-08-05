@@ -47,6 +47,20 @@ function mapResult(row: PrismaValidationResult): ValidationResultRecord {
 }
 
 export class ValidationResultRepository extends BaseRepository {
+  async findById(
+    organizationId: string,
+    id: string,
+  ): Promise<ValidationResultRecord | null> {
+    const row = await prisma.validationResult.findFirst({
+      where: {
+        id,
+        ...this.tenantWhere({ organizationId }),
+      },
+    });
+
+    return row ? mapResult(row) : null;
+  }
+
   async listByRun(
     organizationId: string,
     runId: string,

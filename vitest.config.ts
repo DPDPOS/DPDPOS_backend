@@ -11,11 +11,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.spec.ts", "src/modules/**/tests/**/*.spec.ts"],
-    exclude: [
-      "node_modules",
-      "dist",
-      // empty scaffold placeholders owned by other developers
-      "src/modules/violations/tests/**",
-    ],
+    exclude: ["node_modules", "dist"],
   },
 });
