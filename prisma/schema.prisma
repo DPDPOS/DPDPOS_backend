@@ -62,6 +62,8 @@ model Organization {
   outboxEvents         OutboxEvent[]
   dataAssets           DataAsset[]
   processingActivities ProcessingActivity[]
+  notices              Notice[]
+  consentRecords       ConsentRecord[]
 
   @@map("organizations")
 }
@@ -327,6 +329,7 @@ model DataAsset {
   owner User? @relation("DataAssetOwner", fields: [ownerUserId], references: [id])
 
   processingActivities ProcessingActivity[]
+  consentRecords      ConsentRecord[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -362,4 +365,74 @@ model ProcessingActivity {
   @@index([organizationId])
   @@index([dataAssetId])
   @@map("processing_activities")
+}
+
+// =============================================================================
+// Developer B — Consent
+// =============================================================================
+
+enum ConsentState {
+  GRANTED
+  WITHDRAWN
+}
+
+model Notice {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  title         String
+  version       Int      @default(1)
+  content       String
+  effectiveFrom DateTime? @map("effective_from")
+  publishedBy   String?  @map("published_by") @db.Uuid
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  consentRecords ConsentRecord[]
+
+  @@unique([organizationId, title, version])
+  @@index([organizationId])
+  @@map("notices")
+}
+
+model ConsentRecord {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId       String       @map("organization_id") @db.Uuid
+  dataSubjectIdentifier String      @map("data_subject_identifier")
+  noticeId             String?      @map("notice_id") @db.Uuid
+  dataAssetId          String?      @map("data_asset_id") @db.Uuid
+
+  purpose      String
+  consentState ConsentState @default(GRANTED) @map("consent_state")
+  grantedAt    DateTime     @default(now()) @map("granted_at")
+  withdrawnAt  DateTime?    @map("withdrawn_at")
+  proofFileId  String?      @map("proof_file_id")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  notice Notice? @relation(fields: [noticeId], references: [id])
+
+  dataAsset DataAsset? @relation(fields: [dataAssetId], references: [id])
+
+  @@index([organizationId])
+  @@index([dataSubjectIdentifier])
+  @@index([noticeId])
+  @@index([dataAssetId])
+  @@map("consent_records")
 }
