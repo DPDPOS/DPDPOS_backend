@@ -18,6 +18,14 @@ import { createDataSubjectRequestRouter } from "../modules/rights/routes/data-su
 import { createValidationRouter } from "../modules/validations/routes/validation.routes.js";
 import { createViolationRouter } from "../modules/violations/routes/violation.routes.js";
 
+// Developer C modules
+import { createAuditRouter } from "../modules/audit/index.js";
+import { createEvidenceRouter } from "../modules/evidence/index.js";
+import { createNotificationRouter } from "../modules/notifications/index.js";
+import { createAnalyticsRouter } from "../modules/analytics/index.js";
+import { createReportRouter } from "../modules/reports/index.js";
+import { createAiRouter } from "../modules/ai/index.js";
+
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
     sendSuccess(res, { status: "ok" });
@@ -51,4 +59,12 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/data-subject-requests`, createDataSubjectRequestRouter());
   app.use(`${v1}`, createValidationRouter());
   app.use(`${v1}/violations`, createViolationRouter());
+
+  // Developer C routes
+  app.use(`${v1}/audit`, createAuditRouter());
+  app.use(`${v1}/evidence`, createEvidenceRouter());
+  app.use(`${v1}/notifications`, createNotificationRouter());
+  app.use(`${v1}/analytics`, createAnalyticsRouter());
+  app.use(`${v1}/reports`, createReportRouter());
+  app.use(`${v1}/ai`, createAiRouter());
 }
