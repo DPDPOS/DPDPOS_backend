@@ -64,6 +64,10 @@ model Organization {
   processingActivities ProcessingActivity[]
   notices              Notice[]
   consentRecords       ConsentRecord[]
+  dataSubjectRequests  DataSubjectRequest[]
+  validationRules      ValidationRule[]
+  validationRuns       ValidationRun[]
+  validationResults    ValidationResult[]
 
   @@map("organizations")
 }
@@ -91,6 +95,7 @@ model User {
   headedDepartments Department[]     @relation("DepartmentHead")
   refreshSessions   RefreshSession[]
   ownedDataAssets   DataAsset[]      @relation("DataAssetOwner")
+  assignedRequests  DataSubjectRequest[] @relation("DataSubjectRequestAssignee")
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
@@ -435,4 +440,191 @@ model ConsentRecord {
   @@index([noticeId])
   @@index([dataAssetId])
   @@map("consent_records")
+}
+
+// =============================================================================
+// Developer B — Rights
+// =============================================================================
+
+enum DataSubjectRequestType {
+  ACCESS
+  CORRECTION
+  COMPLETION
+  UPDATING
+  ERASURE
+  GRIEVANCE_REDRESSAL
+  NOMINATION
+}
+
+enum DataSubjectRequestStatus {
+  SUBMITTED
+  ASSIGNED
+  IN_PROGRESS
+  RESPONDED
+  REJECTED
+  CLOSED
+}
+
+model DataSubjectRequest {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  requestType        DataSubjectRequestType @map("request_type")
+  requesterReference String                 @map("requester_reference")
+  status             DataSubjectRequestStatus @default(SUBMITTED)
+  assignedTo         String?                @map("assigned_to") @db.Uuid
+
+  openedAt DateTime  @default(now()) @map("opened_at")
+  dueAt    DateTime? @map("due_at")
+  closedAt DateTime? @map("closed_at")
+
+  resolutionSummary String? @map("resolution_summary")
+
+  version Int @default(1)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  assignee User? @relation("DataSubjectRequestAssignee", fields: [assignedTo], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([assignedTo])
+  @@index([requestType])
+  @@map("data_subject_requests")
+}
+
+// =============================================================================
+// Developer B — Validations
+// =============================================================================
+
+enum RuleSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RuleCategory {
+  NOTICE
+  CONSENT
+  RETENTION
+  RIGHTS
+}
+
+enum ValidationTriggerType {
+  MANUAL
+  SCHEDULED
+}
+
+enum ValidationRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum ValidationResultStatus {
+  PASS
+  FAIL
+  SKIPPED
+  ERROR
+}
+
+model ValidationRule {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  ruleCode      String       @map("rule_code")
+  title         String
+  description   String?
+  legalBasisRef String?      @map("legal_basis_ref")
+  severity      RuleSeverity @default(MEDIUM)
+  category      RuleCategory
+  activeFlag    Boolean      @default(true) @map("active_flag")
+  version       Int          @default(1)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  results ValidationResult[]
+
+  @@unique([organizationId, ruleCode])
+  @@index([organizationId])
+  @@index([organizationId, activeFlag])
+  @@map("validation_rules")
+}
+
+model ValidationRun {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  triggerType  ValidationTriggerType @map("trigger_type")
+  triggeredBy  String?               @map("triggered_by") @db.Uuid
+  status       ValidationRunStatus   @default(PENDING)
+  startedAt    DateTime              @default(now()) @map("started_at")
+  finishedAt   DateTime?             @map("finished_at")
+  durationMs   Int?                  @map("duration_ms")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+
+  results ValidationResult[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("validation_runs")
+}
+
+model ValidationResult {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  runId          String @map("run_id") @db.Uuid
+  ruleId         String @map("rule_id") @db.Uuid
+
+  ruleCode      String @map("rule_code")
+  resultStatus  ValidationResultStatus @map("result_status")
+  explanation   String?
+  score         Int?
+  evidenceRequiredFlag Boolean @default(false) @map("evidence_required_flag")
+  controlId     String? @map("control_id") @db.Uuid
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  run          ValidationRun @relation(fields: [runId], references: [id])
+  rule         ValidationRule @relation(fields: [ruleId], references: [id])
+
+  @@unique([runId, ruleId])
+  @@index([organizationId])
+  @@index([runId])
+  @@map("validation_results")
 }

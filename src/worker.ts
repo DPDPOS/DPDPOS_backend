@@ -7,7 +7,7 @@ import { startOutboxRelay, stopOutboxRelay } from "./events/outbox/outbox-relay.
 async function main() {
   await connectDatabase();
   await connectRedis();
-  registerJobProcessors();
+  await registerJobProcessors();
   startOutboxRelay();
   logger.info("worker.ready");
 
