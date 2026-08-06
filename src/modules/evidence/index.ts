@@ -1,1 +1,2 @@
-export const evidenceModule = { name: "evidence", owner: "Developer C" } as const;
+export { createEvidenceRouter } from "./routes/evidence.routes.js";
+export { EvidenceService, evidenceService } from "./services/evidence.service.js";

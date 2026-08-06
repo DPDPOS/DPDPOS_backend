@@ -108,5 +108,5 @@ Privileged roles (`ORG_ADMIN`, `DPO`, `AUDITOR`) should enroll MFA. Use `require
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/api/v1/requirements` | `requirement:read` |
-| POST | `/api/v1/requirements` | `requirement:create` |
-| POST | `/api/v1/requirements/:id/map` | `requirement:create` |
+| POST | `/api/v1/requirements` | `requirement:create`  |
+| POST | `/api/v1/requirements/:id/map` | `requirement:create` | 

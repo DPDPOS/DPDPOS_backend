@@ -11,6 +11,21 @@ import { createDepartmentsRouter } from "../modules/departments/routes/departmen
 import { createFrameworkRouter } from "../modules/framework/routes/framework.routes.js";
 import { createControlsRouter } from "../modules/controls/routes/control.routes.js";
 import { createRequirementsRouter } from "../modules/requirements/routes/requirement.routes.js";
+import { createDataAssetRouter } from "../modules/inventory/routes/data-asset.routes.js";
+import { createProcessingActivityRouter } from "../modules/inventory/routes/processing-activity.routes.js";
+import { createConsentRouter } from "../modules/consent/routes/consent.routes.js";
+import { createDataSubjectRequestRouter } from "../modules/rights/routes/data-subject-request.routes.js";
+import { createValidationRouter } from "../modules/validations/routes/validation.routes.js";
+import { createViolationRouter } from "../modules/violations/routes/violation.routes.js";
+import { createRemediationTaskRouter } from "../modules/remediation/routes/remediation-task.routes.js";
+
+// Developer C modules
+import { createAuditRouter } from "../modules/audit/index.js";
+import { createEvidenceRouter } from "../modules/evidence/index.js";
+import { createNotificationRouter } from "../modules/notifications/index.js";
+import { createAnalyticsRouter } from "../modules/analytics/index.js";
+import { createReportRouter } from "../modules/reports/index.js";
+import { createAiRouter } from "../modules/ai/index.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -39,4 +54,19 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/framework`, createFrameworkRouter());
   app.use(`${v1}/controls`, createControlsRouter());
   app.use(`${v1}/requirements`, createRequirementsRouter());
+  app.use(`${v1}/data-assets`, createDataAssetRouter());
+  app.use(`${v1}/processing-activities`, createProcessingActivityRouter());
+  app.use(`${v1}`, createConsentRouter());
+  app.use(`${v1}/data-subject-requests`, createDataSubjectRequestRouter());
+  app.use(`${v1}`, createValidationRouter());
+  app.use(`${v1}/violations`, createViolationRouter());
+  app.use(`${v1}/remediation-tasks`, createRemediationTaskRouter());
+
+  // Developer C routes
+  app.use(`${v1}/audit`, createAuditRouter());
+  app.use(`${v1}/evidence`, createEvidenceRouter());
+  app.use(`${v1}/notifications`, createNotificationRouter());
+  app.use(`${v1}/analytics`, createAnalyticsRouter());
+  app.use(`${v1}/reports`, createReportRouter());
+  app.use(`${v1}/ai`, createAiRouter());
 }

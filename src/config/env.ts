@@ -21,6 +21,13 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v !== "false"),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
+  AI_API_KEY: z.string().optional(),
+  AI_BASE_URL: z
+    .union([z.string().url(), z.literal("")])
+    .optional()
+    .transform((value) => value || undefined),
+  AI_MODEL: z.string().optional(),
+  AI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
 });
 
 export type Env = z.infer<typeof envSchema>;

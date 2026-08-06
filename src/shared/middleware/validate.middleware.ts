@@ -7,6 +7,7 @@ type RequestTarget = "body" | "params" | "query";
 export type ValidatedRequest = Request & {
   validatedQuery?: unknown;
   validatedParams?: unknown;
+  validatedBody?: unknown;
 };
 
 function validate(schema: ZodType, target: RequestTarget) {
@@ -25,6 +26,7 @@ function validate(schema: ZodType, target: RequestTarget) {
       Object.assign(req.params, parsed.data as object);
     } else {
       req.body = parsed.data;
+      req.validatedBody = parsed.data;
     }
     next();
   };
