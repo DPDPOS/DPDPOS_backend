@@ -3,7 +3,8 @@
 **Project:** DPDPOS Backend  
 **Owner:** Developer A  
 **Document date:** 2026-07-27  
-**Source of truth:** `dpdpos-progress-tracker.xlsx` + `docs/architecture.md`
+**Source of truth:** `dpdpos-progress-tracker.xlsx` (local only — do not commit) + `docs/architecture.md`  
+**Remaining work + progressive commits:** see `docs/10_developer_a_remaining_implementation_plan.md`
 
 ---
 
