@@ -19,9 +19,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed/seed.ts",
-    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f docker/docker-compose.yml down",
-    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f"
+    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker-compose -f docker/docker-compose.yml logs -f",
+    "demo:poc": "tsx scripts/poc-demo.ts",
+    "demo:setup": "bash scripts/run-poc-demo.sh --setup-only",
+    "demo": "bash scripts/run-poc-demo.sh --keep-alive"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.848.0",

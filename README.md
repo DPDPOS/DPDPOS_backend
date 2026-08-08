@@ -7,7 +7,7 @@ Digital Personal Data Protection Operating System — API and background workers
 ## Prerequisites
 
 - Node.js 20+
-- Docker Desktop (Postgres, Redis, MinIO)
+- Docker Desktop (Postgres, Redis, MinIO) — this machine uses the standalone `docker-compose` CLI
 
 ## Quick start
 
@@ -39,6 +39,25 @@ Health checks:
 - `GET /readyz` — Postgres + Redis readiness
 
 API base path: `/api/v1`
+
+## Proof-of-concept demo
+
+One command boots infra, seeds the demo org, starts API + worker, and walks the live DPDP story (framework → inventory → consent → rights → validation → violation → remediation):
+
+```bash
+npm run demo
+```
+
+Or step by step:
+
+```bash
+npm run demo:setup          # docker + migrate + seed
+npm run dev                 # terminal 1
+npm run dev:worker          # terminal 2
+npm run demo:poc            # narrative HTTP demo
+```
+
+Demo admin (from seed): `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
 
 ## Scripts
 

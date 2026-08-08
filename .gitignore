@@ -15,6 +15,7 @@ build/
 logs/
 *.log
 npm-debug.log*
+.demo-logs/
 
 # coverage / test
 coverage/
