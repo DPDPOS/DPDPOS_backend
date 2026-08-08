@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DPDPOS — Evaluator Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/demo/demo.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="top">
+      <div class="brand">
+        <span class="mark">DPD</span>
+        <span class="name">DPDPOS</span>
+      </div>
+      <p class="tag">Digital Personal Data Protection Operating System</p>
+      <div class="status" id="apiStatus">Checking API…</div>
+    </header>
+
+    <main>
+      <section class="hero" id="loginPanel">
+        <h1>Live compliance operating system</h1>
+        <p class="lede">
+          Sign in with the seeded fiduciary admin to show an evaluator the full
+          loop: framework → inventory → consent → rights → validation → remediation.
+        </p>
+        <form id="loginForm" class="login">
+          <label>
+            Organization ID
+            <input id="orgId" name="organizationId" autocomplete="off" />
+          </label>
+          <label>
+            Email
+            <input id="email" name="email" type="email" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input id="password" name="password" type="password" autocomplete="current-password" />
+          </label>
+          <button type="submit" id="loginBtn">Open live dashboard</button>
+          <p class="hint" id="loginError" hidden></p>
+        </form>
+      </section>
+
+      <section class="board" id="board" hidden>
+        <div class="board-head">
+          <div>
+            <p class="eyebrow">Evaluator view · live API</p>
+            <h2 id="orgLabel">Organization</h2>
+            <p class="meta" id="sessionMeta"></p>
+          </div>
+          <div class="actions">
+            <button type="button" class="ghost" id="refreshBtn">Refresh</button>
+            <button type="button" class="ghost" id="logoutBtn">Sign out</button>
+          </div>
+        </div>
+
+        <div class="score-hero">
+          <div class="score-ring" id="scoreRing">
+            <span class="score-value" id="scoreValue">—</span>
+            <span class="score-label">Compliance score</span>
+          </div>
+          <div class="score-copy">
+            <h3>What this number means</h3>
+            <p id="scoreDetail">
+              Aggregated from the latest validation run against DPDP operating rules.
+            </p>
+            <ul class="score-stats" id="scoreStats"></ul>
+          </div>
+        </div>
+
+        <ol class="journey" id="journey" aria-label="Product story"></ol>
+
+        <div class="panels" id="panels"></div>
+
+        <aside class="footnote">
+          <p>
+            Data is read live from <code>/api/v1/*</code> on this server.
+            Re-seed or re-run <code>npm run demo</code> to refresh the narrative dataset.
+          </p>
+          <p>
+            Also available:
+            <a href="http://127.0.0.1:9001" target="_blank" rel="noreferrer">MinIO evidence console</a>
+            · Prisma Studio via <code>npx prisma studio</code>
+          </p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/demo/demo.js" type="module"></script>
+  </body>
+</html>

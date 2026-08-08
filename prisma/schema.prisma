@@ -75,6 +75,7 @@ model Organization {
   notifications        Notification[]
   aiUsageLogs          AiUsageLog[]
   remediationTasks     RemediationTask[]
+  assessments          Assessment[]
 
   @@map("organizations")
 }
@@ -1010,4 +1011,248 @@ model AiUsageLog {
   @@index([organizationId, useCase])
   @@index([organizationId, status])
   @@map("ai_usage_logs")
+}
+
+// =============================================================================
+// Assessment / CLI compliance spine
+// =============================================================================
+
+enum AssessmentStatus {
+  DRAFT
+  IN_PROGRESS
+  READY_FOR_EVALUATION
+  EVALUATED
+  ARCHIVED
+}
+
+enum ScanJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ControlEvalStatus {
+  PASS
+  PARTIAL
+  FAIL
+  UNKNOWN
+  NOT_APPLICABLE
+}
+
+enum AssessmentActorType {
+  USER
+  CLI
+  SYSTEM
+}
+
+model Assessment {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  name             String
+  status           AssessmentStatus @default(DRAFT)
+  currentVersion   Int              @default(1) @map("current_version")
+  createdBy        String?          @map("created_by") @db.Uuid
+  updatedBy        String?          @map("updated_by") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  versions     AssessmentVersion[]
+  documents    AssessmentDocument[]
+  answers      QuestionnaireAnswer[]
+  cliTokens    CliToken[]
+  scanJobs     ScanJob[]
+  findings     CliFinding[]
+  controlResults AssessmentControlResult[]
+  reports      AssessmentReport[]
+  auditEvents  AssessmentAuditEvent[]
+
+  @@index([organizationId, status])
+  @@map("assessments")
+}
+
+model AssessmentVersion {
+  id             String   @id @default(uuid()) @db.Uuid
+  assessmentId   String   @map("assessment_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  versionNumber  Int      @map("version_number")
+  label          String?
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, versionNumber])
+  @@index([organizationId, assessmentId])
+  @@map("assessment_versions")
+}
+
+model AssessmentDocument {
+  id             String   @id @default(uuid()) @db.Uuid
+  assessmentId   String   @map("assessment_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  versionNumber  Int      @map("version_number")
+  fileName       String   @map("file_name")
+  fileType       String   @map("file_type")
+  documentType   String   @default("OTHER") @map("document_type")
+  mimeType       String?  @map("mime_type")
+  storageKey     String?  @map("storage_key")
+  fileSizeBytes  Int?     @map("file_size_bytes")
+  uploadStatus   String   @default("READY") @map("upload_status")
+  contentBase64  String?  @map("content_base64") @db.Text
+  extractedText  String?  @map("extracted_text") @db.Text
+  checksum       String
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId, versionNumber])
+  @@index([organizationId])
+  @@map("assessment_documents")
+}
+
+model QuestionnaireAnswer {
+  id             String   @id @default(uuid()) @db.Uuid
+  assessmentId   String   @map("assessment_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  versionNumber  Int      @map("version_number")
+  questionCode   String   @map("question_code")
+  valueJson      Json     @map("value_json")
+  answeredBy     String?  @map("answered_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, versionNumber, questionCode])
+  @@index([organizationId])
+  @@map("questionnaire_answers")
+}
+
+model CliToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  assessmentId   String    @map("assessment_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  label          String
+  tokenHash      String    @unique @map("token_hash")
+  tokenPrefix    String    @map("token_prefix")
+  expiresAt      DateTime? @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  lastUsedAt     DateTime? @map("last_used_at")
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([organizationId])
+  @@map("cli_tokens")
+}
+
+model ScanJob {
+  id             String        @id @default(uuid()) @db.Uuid
+  assessmentId   String        @map("assessment_id") @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  versionNumber  Int           @map("version_number")
+  targetType     String        @map("target_type")
+  targetPath     String        @map("target_path")
+  cliVersion     String        @map("cli_version")
+  status         ScanJobStatus @default(PENDING)
+  findingsCount  Int           @default(0) @map("findings_count")
+  startedAt      DateTime      @default(now()) @map("started_at")
+  finishedAt     DateTime?     @map("finished_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  assessment Assessment  @relation(fields: [assessmentId], references: [id])
+  findings   CliFinding[]
+
+  @@index([assessmentId, versionNumber])
+  @@index([organizationId])
+  @@map("scan_jobs")
+}
+
+model CliFinding {
+  id                String   @id @default(uuid()) @db.Uuid
+  assessmentId      String   @map("assessment_id") @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  scanJobId         String   @map("scan_job_id") @db.Uuid
+  versionNumber     Int      @map("version_number")
+  sourceType        String   @map("source_type")
+  location          String
+  findingType       String   @map("finding_type")
+  excerpt           String?  @db.Text
+  confidence        Float
+  controlCandidates String[] @map("control_candidates")
+  sourceHash        String?  @map("source_hash")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  scanJob    ScanJob    @relation(fields: [scanJobId], references: [id])
+
+  @@index([assessmentId, versionNumber])
+  @@index([scanJobId])
+  @@index([organizationId])
+  @@map("cli_findings")
+}
+
+model AssessmentControlResult {
+  id             String            @id @default(uuid()) @db.Uuid
+  assessmentId   String            @map("assessment_id") @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  versionNumber  Int               @map("version_number")
+  controlCode    String            @map("control_code")
+  status         ControlEvalStatus
+  severity       String            @default("MEDIUM")
+  reasoning      String            @db.Text
+  evidenceRefs   Json              @default("[]") @map("evidence_refs")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, versionNumber, controlCode])
+  @@index([organizationId])
+  @@map("assessment_control_results")
+}
+
+model AssessmentReport {
+  id             String   @id @default(uuid()) @db.Uuid
+  assessmentId   String   @map("assessment_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  versionNumber  Int      @map("version_number")
+  score          Float
+  summary        Json
+  results        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, versionNumber])
+  @@index([organizationId])
+  @@map("assessment_reports")
+}
+
+model AssessmentAuditEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  assessmentId   String              @map("assessment_id") @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  actorUserId    String?             @map("actor_user_id") @db.Uuid
+  actorType      AssessmentActorType @map("actor_type")
+  action         String
+  objectType     String              @map("object_type")
+  objectId       String?             @map("object_id")
+  payloadHash    String              @map("payload_hash")
+  eventHash      String              @map("event_hash")
+  prevEventHash  String?             @map("prev_event_hash")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId, createdAt])
+  @@index([organizationId])
+  @@map("assessment_audit_events")
 }

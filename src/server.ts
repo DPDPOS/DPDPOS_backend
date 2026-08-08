@@ -12,8 +12,8 @@ async function main() {
   const app = createApp();
   startOutboxRelay();
 
-  const server = app.listen(appConfig.port, () => {
-    logger.info({ port: appConfig.port }, "api.listening");
+  const server = app.listen(appConfig.port, "0.0.0.0", () => {
+    logger.info({ port: appConfig.port, host: "0.0.0.0" }, "api.listening");
   });
 
   const shutdown = async (signal: string) => {

@@ -31,29 +31,76 @@ done
 
 API_PID=""
 WORKER_PID=""
+SERVICES_STARTED=0
 LOG_DIR="$ROOT/.demo-logs"
 mkdir -p "$LOG_DIR"
 
+# Stop leftover API/worker so prisma generate can rewrite the query-engine DLL (Windows EPERM).
+stop_demo_services() {
+  echo "→ Stopping any previous demo API/worker"
+
+  for f in "$LOG_DIR/api.pid" "$LOG_DIR/worker.pid"; do
+    if [[ -f "$f" ]]; then
+      local old_pid
+      old_pid="$(tr -d '[:space:]' <"$f" || true)"
+      if [[ -n "${old_pid}" ]]; then
+        kill "$old_pid" 2>/dev/null || true
+        if command -v taskkill.exe >/dev/null 2>&1; then
+          taskkill.exe //PID "$old_pid" //F >/dev/null 2>&1 || true
+        fi
+      fi
+      rm -f "$f"
+    fi
+  done
+
+  if [[ -n "${API_PID}" ]]; then
+    kill "$API_PID" 2>/dev/null || true
+    API_PID=""
+  fi
+  if [[ -n "${WORKER_PID}" ]]; then
+    kill "$WORKER_PID" 2>/dev/null || true
+    WORKER_PID=""
+  fi
+
+  # Windows host (common when bash is WSL/Git Bash but Node is Windows)
+  if command -v powershell.exe >/dev/null 2>&1; then
+    local ps1="$ROOT/scripts/stop-demo-services.ps1"
+    # Convert /mnt/e/... to E:\... for Windows PowerShell when needed
+    local win_ps1="$ps1"
+    if [[ "$ps1" == /mnt/* ]]; then
+      local drive rest
+      drive="$(echo "$ps1" | cut -d/ -f3 | tr '[:lower:]' '[:upper:]')"
+      rest="$(echo "$ps1" | cut -d/ -f4- | tr '/' '\\')"
+      win_ps1="${drive}:\\${rest}"
+    elif [[ "$ps1" =~ ^/([a-zA-Z])/(.*) ]]; then
+      win_ps1="${BASH_REMATCH[1]^}:\\${BASH_REMATCH[2]//\//\\}"
+    fi
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$win_ps1" >/dev/null 2>&1 || true
+  fi
+
+  # Native Linux/WSL listeners on :3000
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k 3000/tcp >/dev/null 2>&1 || true
+  elif command -v lsof >/dev/null 2>&1; then
+    # shellcheck disable=SC2046
+    kill -9 $(lsof -ti:3000) 2>/dev/null || true
+  fi
+
+  sleep 1
+}
+
 cleanup() {
-  if [[ "$KEEP_ALIVE" -eq 1 ]]; then
+  if [[ "$KEEP_ALIVE" -eq 1 && "$SERVICES_STARTED" -eq 1 ]]; then
     echo ""
     echo "Leaving API/worker running (--keep-alive)."
     echo "  API logs:    $LOG_DIR/api.log"
     echo "  Worker logs: $LOG_DIR/worker.log"
     echo "  Stop with:   kill \$(cat $LOG_DIR/api.pid $LOG_DIR/worker.pid 2>/dev/null) 2>/dev/null || true"
+    echo "           or: powershell -File scripts/stop-demo-services.ps1"
     return
   fi
-  if [[ -n "${API_PID}" ]] && kill -0 "$API_PID" 2>/dev/null; then
-    kill "$API_PID" 2>/dev/null || true
-  fi
-  if [[ -n "${WORKER_PID}" ]] && kill -0 "$WORKER_PID" 2>/dev/null; then
-    kill "$WORKER_PID" 2>/dev/null || true
-  fi
-  if [[ -f "$LOG_DIR/api.pid" ]]; then
-    kill "$(cat "$LOG_DIR/api.pid")" 2>/dev/null || true
-  fi
-  if [[ -f "$LOG_DIR/worker.pid" ]]; then
-    kill "$(cat "$LOG_DIR/worker.pid")" 2>/dev/null || true
+  if [[ "$SERVICES_STARTED" -eq 1 ]]; then
+    stop_demo_services
   fi
 }
 trap cleanup EXIT
@@ -106,8 +153,16 @@ if [[ "$DEMO_ONLY" -eq 0 ]]; then
     sleep 1
   done
 
+  # Must free query_engine-windows.dll.node before prisma generate on Windows
+  stop_demo_services
+
   echo "→ Prisma generate + migrate + seed"
-  npx prisma generate
+  if ! npx prisma generate; then
+    echo "  prisma generate failed (often a file lock). Retrying after another stop…" >&2
+    stop_demo_services
+    sleep 2
+    npx prisma generate
+  fi
   npx prisma migrate deploy
   npm run prisma:seed
 fi
@@ -121,22 +176,72 @@ if [[ "$SETUP_ONLY" -eq 1 ]]; then
   exit 0
 fi
 
-# Start API + worker if not already healthy
-if ! curl -sf "http://127.0.0.1:3000/readyz" >/dev/null 2>&1; then
+# Candidate URLs for readiness probes.
+# On WSL, Windows-hosted Node is often unreachable via 127.0.0.1 from Linux curl,
+# but reachable via the Windows host IP from /etc/resolv.conf.
+api_probe_urls() {
+  local urls=("http://127.0.0.1:3000" "http://localhost:3000")
+  if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+    local win_host
+    win_host="$(grep -m1 '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}')"
+    if [[ -n "${win_host}" ]]; then
+      urls+=("http://${win_host}:3000")
+    fi
+    urls+=("http://host.docker.internal:3000")
+  fi
+  printf '%s\n' "${urls[@]}"
+}
+
+api_http_ready() {
+  local base="$1"
+  curl -sf --connect-timeout 1 --max-time 2 "${base}/readyz" >/dev/null 2>&1
+}
+
+# DEMO_BASE_URL is for Node (npx/tsx), which usually shares the API's network
+# namespace — keep loopback unless the caller overrides it.
+export DEMO_BASE_URL="${DEMO_BASE_URL:-http://127.0.0.1:3000}"
+
+api_already_up=0
+while IFS= read -r base; do
+  if api_http_ready "$base"; then
+    api_already_up=1
+    break
+  fi
+done < <(api_probe_urls)
+
+if [[ "$api_already_up" -eq 0 ]]; then
   echo "→ Starting API server"
-  npm run dev >"$LOG_DIR/api.log" 2>&1 &
+  : >"$LOG_DIR/api.log"
+  # Use plain tsx (not watch) so Prisma engine stays unlockable on re-runs
+  npx tsx src/server.ts >"$LOG_DIR/api.log" 2>&1 &
   API_PID=$!
   echo "$API_PID" >"$LOG_DIR/api.pid"
 
   echo "→ Starting background worker (validation + event bus)"
-  npm run dev:worker >"$LOG_DIR/worker.log" 2>&1 &
+  : >"$LOG_DIR/worker.log"
+  npx tsx src/worker.ts >"$LOG_DIR/worker.log" 2>&1 &
   WORKER_PID=$!
   echo "$WORKER_PID" >"$LOG_DIR/worker.pid"
+  SERVICES_STARTED=1
 
   echo "→ Waiting for API readiness…"
+  ready=0
   for i in $(seq 1 90); do
-    if curl -sf "http://127.0.0.1:3000/readyz" >/dev/null 2>&1; then
-      echo "  API is ready"
+    while IFS= read -r base; do
+      if api_http_ready "$base"; then
+        echo "  API is ready (${base}/readyz)"
+        ready=1
+        break
+      fi
+    done < <(api_probe_urls)
+    if [[ "$ready" -eq 1 ]]; then
+      break
+    fi
+    # Fallback: API logged listening but this shell cannot curl it (WSL↔Windows).
+    # Node-based poc-demo still reaches 127.0.0.1 on the Windows side.
+    if grep -q 'api.listening' "$LOG_DIR/api.log" 2>/dev/null; then
+      echo "  API is ready (detected via log; curl to localhost may be blocked from this shell)"
+      ready=1
       break
     fi
     if [[ "$i" -eq 90 ]]; then
@@ -149,6 +254,7 @@ if ! curl -sf "http://127.0.0.1:3000/readyz" >/dev/null 2>&1; then
 else
   echo "→ API already running on :3000"
   KEEP_ALIVE=1
+  SERVICES_STARTED=1
 fi
 
 echo ""
@@ -158,3 +264,8 @@ npx tsx scripts/poc-demo.ts
 echo ""
 echo "Done. Re-run anytime with:  npm run demo:poc"
 echo "Full bootstrap again with: ./scripts/run-poc-demo.sh"
+echo ""
+echo "Evaluator visual dashboard:"
+echo "  http://127.0.0.1:3000/demo"
+echo "Database browser (optional):"
+echo "  npm run prisma:studio"

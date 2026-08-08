@@ -24,7 +24,10 @@
     "docker:logs": "docker-compose -f docker/docker-compose.yml logs -f",
     "demo:poc": "tsx scripts/poc-demo.ts",
     "demo:setup": "bash scripts/run-poc-demo.sh --setup-only",
-    "demo": "bash scripts/run-poc-demo.sh --keep-alive"
+    "demo": "bash scripts/run-poc-demo.sh --keep-alive",
+    "demo:ui": "echo Open http://127.0.0.1:3000/demo (API must be running)",
+    "prisma:studio": "prisma studio",
+    "test:spine": "vitest run tests/integration/compliance-spine.http.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.848.0",

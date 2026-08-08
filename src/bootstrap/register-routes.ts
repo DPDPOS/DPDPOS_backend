@@ -26,6 +26,7 @@ import { createNotificationRouter } from "../modules/notifications/index.js";
 import { createAnalyticsRouter } from "../modules/analytics/index.js";
 import { createReportRouter } from "../modules/reports/index.js";
 import { createAiRouter } from "../modules/ai/index.js";
+import { createAssessmentRouter } from "../modules/assessments/index.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -69,4 +70,5 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/analytics`, createAnalyticsRouter());
   app.use(`${v1}/reports`, createReportRouter());
   app.use(`${v1}/ai`, createAiRouter());
+  app.use(`${v1}/assessments`, createAssessmentRouter());
 }
