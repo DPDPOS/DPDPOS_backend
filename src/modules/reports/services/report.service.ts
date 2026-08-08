@@ -45,13 +45,17 @@ export class ReportService {
       this.repo.countByOrg(ctx.organizationId, filters),
     ]);
     
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
     return {
-      data,
+      items: data,
       meta: {
-        page: query.page,
-        pageSize: query.pageSize,
-        total,
-        totalPages: Math.ceil(total / query.pageSize),
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        },
       },
     };
   }

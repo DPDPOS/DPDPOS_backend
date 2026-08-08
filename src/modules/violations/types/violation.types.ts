@@ -8,6 +8,7 @@ export type ViolationRecord = {
   organizationId: string;
 
   validationResultId: string | null;
+  sourceKey: string | null;
   severity: RuleSeverity;
   title: string;
   description: string | null;

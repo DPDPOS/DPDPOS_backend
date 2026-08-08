@@ -34,6 +34,7 @@ import {
   ASSESSMENT_DOCUMENT_TYPES,
   ASSESSMENT_DOCUMENT_TYPE_LABELS,
 } from "../domain/document-types.js";
+import { violationService } from "../../violations/services/violation.service.js";
 
 async function requireAssessment(organizationId: string, assessmentId: string) {
   const row = await prisma.assessment.findFirst({
@@ -570,6 +571,34 @@ export class AssessmentService {
       }),
     ]);
 
+    const readyDocs = documents.filter((d) => d.uploadStatus === "READY");
+    const requiredCodes = QUESTIONNAIRE_CATALOG.filter((q) => q.required !== false).map(
+      (q) => q.code,
+    );
+    // Soft showIf: only require unconditionally visible required questions.
+    const answeredCodes = new Set(answers.map((a) => a.questionCode));
+    const missingRequired = requiredCodes.filter((code) => {
+      const q = QUESTIONNAIRE_CATALOG.find((row) => row.code === code);
+      if (!q) return false;
+      if (q.showIf) {
+        const prior = answers.find((a) => a.questionCode === q.showIf!.code);
+        const priorVal = prior?.valueJson;
+        if (priorVal !== q.showIf.equals) return false;
+      }
+      return !answeredCodes.has(code);
+    });
+
+    if (readyDocs.length === 0) {
+      throw new ValidationError(
+        "Upload at least one READY policy document before evaluating readiness.",
+      );
+    }
+    if (missingRequired.length > 0) {
+      throw new ValidationError(
+        `Complete required questionnaire answers before evaluate (missing: ${missingRequired.slice(0, 5).join(", ")}).`,
+      );
+    }
+
     const evaluated = evaluateControls({
       findings: findings.map((f) => ({
         id: f.id,
@@ -582,12 +611,8 @@ export class AssessmentService {
         questionCode: a.questionCode,
         valueJson: a.valueJson,
       })),
-      documentTexts: documents
-        .map((d) => d.extractedText ?? "")
-        .filter(Boolean),
-      documentTypes: documents
-        .filter((d) => d.uploadStatus === "READY")
-        .map((d) => d.documentType),
+      documentTexts: readyDocs.map((d) => d.extractedText ?? "").filter(Boolean),
+      documentTypes: readyDocs.map((d) => d.documentType),
     });
 
     await prisma.$transaction(async (tx) => {
@@ -652,15 +677,42 @@ export class AssessmentService {
         action: "CONTROLS_EVALUATED",
         objectType: "AssessmentReport",
         objectId: assessmentId,
-        payload: { score: evaluated.score, summary: evaluated.summary, version },
+        payload: {
+          score: evaluated.score,
+          summary: evaluated.summary,
+          version,
+          scoreKind: "READINESS",
+        },
       });
     });
+
+    // Bridge to ops OS: FAIL → Violation → AUTO remediation task.
+    const fails = evaluated.results.filter((r) => r.status === "FAIL");
+    const openedViolations: string[] = [];
+    for (const fail of fails) {
+      const v = await violationService.createFromAssessmentControlFail(ctx, {
+        assessmentId,
+        assessmentName: assessment.name,
+        versionNumber: version,
+        controlCode: fail.controlCode,
+        severity: fail.severity,
+        reasoning: fail.reasoning,
+      });
+      if (v) openedViolations.push(v.id);
+    }
 
     return {
       score: evaluated.score,
       summary: evaluated.summary,
       results: evaluated.results,
       versionNumber: version,
+      scoreKind: "READINESS" as const,
+      openedViolations: openedViolations.length,
+      nextSteps: {
+        remediation: "/remediation",
+        violations: "/violations",
+        hint: "FAIL controls opened violations with AUTO remediation tasks. Fix, re-scan, create a new version, then re-evaluate.",
+      },
     };
   }
 
@@ -681,9 +733,12 @@ export class AssessmentService {
       id: report.id,
       version: report.versionNumber,
       score: report.score,
+      scoreKind: "READINESS" as const,
       summary: report.summary,
       results: report.results,
       createdAt: report.createdAt,
+      disclaimer:
+        "Readiness score only — not legal advice or DPDP certification. Improve by closing FAIL violations, adding policy text, and re-scanning via CLI.",
     };
   }
 
@@ -693,15 +748,37 @@ export class AssessmentService {
     dto: CreateVersionDto,
   ) {
     const assessment = await requireAssessment(ctx.organizationId, assessmentId);
-    const next = assessment.currentVersion + 1;
+    const priorVersion = assessment.currentVersion;
+    const next = priorVersion + 1;
+
+    const priorReport = await prisma.assessmentReport.findUnique({
+      where: {
+        assessmentId_versionNumber: {
+          assessmentId,
+          versionNumber: priorVersion,
+        },
+      },
+    });
 
     const version = await prisma.$transaction(async (tx) => {
+      // Freeze prior readiness pack onto the *new* version row for board trail.
       const created = await tx.assessmentVersion.create({
         data: {
           assessmentId,
           organizationId: ctx.organizationId,
           versionNumber: next,
           label: dto.label ?? `v${next}`,
+          readinessScore: priorReport?.score ?? null,
+          snapshotJson: priorReport
+            ? ({
+                frozenFromVersion: priorVersion,
+                score: priorReport.score,
+                scoreKind: "READINESS",
+                summary: priorReport.summary,
+                results: priorReport.results,
+                frozenAt: new Date().toISOString(),
+              } as Prisma.InputJsonValue)
+            : undefined,
           createdBy: ctx.actorUserId,
         },
       });
@@ -722,12 +799,37 @@ export class AssessmentService {
         action: "VERSION_CREATED",
         objectType: "AssessmentVersion",
         objectId: created.id,
-        payload: { versionNumber: next, label: created.label },
+        payload: {
+          versionNumber: next,
+          label: created.label,
+          frozenPriorScore: priorReport?.score ?? null,
+          frozenFromVersion: priorVersion,
+        },
       });
       return created;
     });
 
-    return version;
+    return {
+      ...version,
+      frozenPriorScore: priorReport?.score ?? null,
+      frozenFromVersion: priorVersion,
+    };
+  }
+
+  async listVersions(ctx: RequestContext, assessmentId: string) {
+    await requireAssessment(ctx.organizationId, assessmentId);
+    return prisma.assessmentVersion.findMany({
+      where: { assessmentId, organizationId: ctx.organizationId },
+      orderBy: { versionNumber: "desc" },
+      select: {
+        id: true,
+        versionNumber: true,
+        label: true,
+        readinessScore: true,
+        snapshotJson: true,
+        createdAt: true,
+      },
+    });
   }
 
   async listAudit(ctx: RequestContext, assessmentId: string) {

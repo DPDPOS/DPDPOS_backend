@@ -189,6 +189,14 @@ export function createAssessmentRouter(): Router {
   );
 
   router.get(
+    "/:id/versions",
+    authenticate,
+    requirePermission(assessmentPermissions.read),
+    validateParams(assessmentIdParamSchema),
+    (req, res, next) => void assessmentController.listVersions(req, res, next),
+  );
+
+  router.get(
     "/:id/audit",
     authenticate,
     requirePermission(assessmentPermissions.read),

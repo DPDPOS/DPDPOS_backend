@@ -50,6 +50,8 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
     await prisma.assessmentDocument.deleteMany({ where: { organizationId } });
     await prisma.assessmentVersion.deleteMany({ where: { organizationId } });
     await prisma.assessment.deleteMany({ where: { organizationId } });
+    await prisma.remediationTask.deleteMany({ where: { organizationId } });
+    await prisma.violation.deleteMany({ where: { organizationId } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId } });
     await prisma.role.deleteMany({ where: { organizationId } });
     await prisma.organization.deleteMany({ where: { id: organizationId } });
@@ -180,13 +182,17 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
       .send({})
       .expect(200);
     expect(typeof evaluated.body.data.score).toBe("number");
+    expect(evaluated.body.data.scoreKind).toBe("READINESS");
+    expect(evaluated.body.data.summary.disclaimer).toBeTruthy();
     expect(evaluated.body.data.results.length).toBeGreaterThan(5);
+    expect(typeof evaluated.body.data.openedViolations).toBe("number");
 
     const report = await request(app)
       .get(`/api/v1/assessments/${assessmentId}/report`)
       .set("Authorization", auth)
       .expect(200);
     expect(report.body.data.summary).toBeTruthy();
+    expect(report.body.data.scoreKind).toBe("READINESS");
     expect(report.body.data.version).toBe(1);
 
     const version = await request(app)
@@ -195,6 +201,8 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
       .send({ label: "v2-after-fixes" })
       .expect(201);
     expect(version.body.data.versionNumber).toBe(2);
+    expect(version.body.data.frozenFromVersion).toBe(1);
+    expect(version.body.data.snapshotJson).toBeTruthy();
 
     const audit = await request(app)
       .get(`/api/v1/assessments/${assessmentId}/audit`)

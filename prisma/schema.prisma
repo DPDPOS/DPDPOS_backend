@@ -663,6 +663,8 @@ model Violation {
   organizationId String @map("organization_id") @db.Uuid
 
   validationResultId String?         @map("validation_result_id") @db.Uuid
+  /** Idempotency key e.g. assessment:{id}:v{n}:{controlCode} */
+  sourceKey          String?         @map("source_key")
   severity           RuleSeverity
   title              String
   description        String?
@@ -1074,13 +1076,16 @@ model Assessment {
 }
 
 model AssessmentVersion {
-  id             String   @id @default(uuid()) @db.Uuid
-  assessmentId   String   @map("assessment_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  versionNumber  Int      @map("version_number")
-  label          String?
-  createdBy      String?  @map("created_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  assessmentId    String   @map("assessment_id") @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  versionNumber   Int      @map("version_number")
+  label           String?
+  /** Frozen readiness report from the previous version at bump time. */
+  snapshotJson    Json?    @map("snapshot_json")
+  readinessScore  Float?   @map("readiness_score")
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 

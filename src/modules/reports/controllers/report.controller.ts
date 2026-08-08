@@ -10,8 +10,8 @@ export class ReportController {
     try {
       const ctx = getRequestContext(req);
       const query = ((req as ValidatedRequest).validatedQuery ?? {}) as ListReportsQuery;
-      const data = await reportService.list(ctx, query);
-      sendSuccess(res, data);
+      const result = await reportService.list(ctx, query);
+      sendSuccess(res, result.items, 200, result.meta);
     } catch (err) {
       next(err);
     }

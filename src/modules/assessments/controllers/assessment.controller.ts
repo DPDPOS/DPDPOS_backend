@@ -324,6 +324,22 @@ export class AssessmentController {
     }
   }
 
+  async listVersions(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const data = await assessmentService.listVersions(
+        getRequestContext(req),
+        param(req.params.id, "id"),
+      );
+      sendSuccess(res, data);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async listAudit(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const data = await assessmentService.listAudit(

@@ -157,11 +157,23 @@ export class EvidenceService {
   }
 
   async list(ctx: RequestContext, query: ListEvidenceQuery) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
     const [items, total] = await Promise.all([
-      this.repo.list(ctx.organizationId, query),
+      this.repo.list(ctx.organizationId, { ...query, page, pageSize }),
       this.repo.countByOrg(ctx.organizationId, query),
     ]);
-    return { items, total, page: query.page, pageSize: query.pageSize };
+    return {
+      items,
+      meta: {
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        },
+      },
+    };
   }
 
   async getDownloadUrl(ctx: RequestContext, id: string) {

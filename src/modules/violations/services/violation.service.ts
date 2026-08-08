@@ -90,6 +90,65 @@ export class ViolationService {
   }
 
   /**
+   * Opens a Violation from an assessment FAIL control so remediation AUTO-tasks
+   * follow the existing ViolationCreated → remediation path.
+   * Idempotent on sourceKey = assessment:{id}:v{n}:{controlCode}.
+   */
+  async createFromAssessmentControlFail(
+    ctx: RequestContext,
+    input: {
+      assessmentId: string;
+      assessmentName: string;
+      versionNumber: number;
+      controlCode: string;
+      severity: string;
+      reasoning: string;
+    },
+  ): Promise<ViolationResponse | null> {
+    const sourceKey = `assessment:${input.assessmentId}:v${input.versionNumber}:${input.controlCode}`;
+    const existing = await this.repository.findBySourceKey(
+      ctx.organizationId,
+      sourceKey,
+    );
+    if (existing) {
+      return toViolationResponse(existing);
+    }
+
+    const severity = (
+      VIOLATION_SEVERITIES.includes(input.severity as (typeof VIOLATION_SEVERITIES)[number])
+        ? input.severity
+        : "HIGH"
+    ) as RuleSeverity;
+
+    return withTransaction(async (tx) => {
+      const violation = await this.repository.create(tx, ctx, {
+        sourceKey,
+        severity,
+        title: `[Assessment] ${input.controlCode} failed — ${input.assessmentName}`,
+        description: `Readiness evaluation v${input.versionNumber} marked ${input.controlCode} as FAIL.\n\n${input.reasoning}\n\nClose this after remediating and re-evaluate the assessment version.`,
+        evidenceRequiredFlag: true,
+      });
+
+      const payload: ViolationCreatedEventPayload = {
+        violationId: violation.id,
+        severity: violation.severity,
+        title: violation.title,
+        evidenceRequiredFlag: true,
+      };
+
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.ViolationCreated,
+        organizationId: ctx.organizationId,
+        actorUserId: ctx.actorUserId,
+        correlationId: ctx.correlationId,
+        payload,
+      });
+
+      return toViolationResponse(violation);
+    });
+  }
+
+  /**
    * Event handler entry point — opens a Violation for a failed validation.
    * Idempotent: a violation already linked to the same validation result is
    * left untouched (unique [organizationId, validationResultId] backs this).

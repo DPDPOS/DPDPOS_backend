@@ -62,12 +62,14 @@ export class NotificationService {
     
     return {
       items,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      }
+      meta: {
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        },
+      },
     };
   }
 

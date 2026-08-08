@@ -15,6 +15,7 @@ type DbClient = Prisma.TransactionClient | typeof prisma;
 
 export type CreateViolationData = {
   validationResultId?: string;
+  sourceKey?: string;
   severity: RuleSeverity;
   title: string;
   description?: string;
@@ -47,6 +48,7 @@ function mapViolation(row: PrismaViolation): ViolationRecord {
     organizationId: row.organizationId,
 
     validationResultId: row.validationResultId,
+    sourceKey: row.sourceKey,
     severity: row.severity,
     title: row.title,
     description: row.description,
@@ -105,6 +107,20 @@ export class ViolationRepository extends BaseRepository {
     return row ? mapViolation(row) : null;
   }
 
+  /** Assessment FAIL dedupe: one open issue per assessment version control. */
+  async findBySourceKey(
+    organizationId: string,
+    sourceKey: string,
+  ): Promise<ViolationRecord | null> {
+    const row = await prisma.violation.findFirst({
+      where: {
+        sourceKey,
+        ...this.tenantWhere({ organizationId }),
+      },
+    });
+    return row ? mapViolation(row) : null;
+  }
+
   async list(
     organizationId: string,
     options: ListViolationsOptions = {},
@@ -137,6 +153,7 @@ export class ViolationRepository extends BaseRepository {
         organizationId: ctx.organizationId,
 
         validationResultId: data.validationResultId,
+        sourceKey: data.sourceKey,
         severity: data.severity,
         title: data.title,
         description: data.description,
