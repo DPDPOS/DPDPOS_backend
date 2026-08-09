@@ -6,6 +6,8 @@ import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { signAccessToken } from "../../auth/utils/jwt.js";
 import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 describe("Users HTTP API", () => {
   const app = createApp();
   const createdOrgIds: string[] = [];
@@ -35,9 +37,7 @@ describe("Users HTTP API", () => {
       await prisma.role.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

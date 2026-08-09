@@ -5,6 +5,7 @@ import { createApp } from "../../../app.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { signAccessToken } from "../../auth/utils/jwt.js";
 import { PERMISSIONS } from "../../../shared/constants/permissions.js";
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
 
 describe("Organizations HTTP API", () => {
   const app = createApp();
@@ -15,17 +16,7 @@ describe("Organizations HTTP API", () => {
   });
 
   afterAll(async () => {
-    if (createdIds.length > 0) {
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdIds } },
-      });
-    }
+    await deleteTestOrganizations(createdIds);
     await prisma.$disconnect();
   });
 

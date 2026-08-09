@@ -12,6 +12,8 @@ import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 import type { BaseDomainEvent } from "../../src/events/types/base-event.interface.js";
 import { onViolationCreated } from "../../src/modules/remediation/events/handlers/violation-created.handler.js";
 
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+
 /**
  * Cross-module happy path for Developer B — Feature REM-005:
  * org → login → violation created (ViolationCreated outbox) → event-bus
@@ -34,32 +36,7 @@ describe("Dev B remediation end-to-end", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.remediationTask.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.violation.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.refreshSession.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.userRole.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.user.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

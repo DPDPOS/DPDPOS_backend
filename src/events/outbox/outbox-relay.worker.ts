@@ -11,11 +11,11 @@ import {
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
-async function relayOnce(): Promise<void> {
+async function relayOnce(options?: { organizationId?: string }): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const rows = await claimUnpublishedOutboxEvents(50);
+    const rows = await claimUnpublishedOutboxEvents(50, options);
     if (rows.length === 0) return;
 
     let published = 0;
@@ -73,7 +73,9 @@ export function stopOutboxRelay(): void {
   }
 }
 
-/** Exported for tests — one relay tick. */
-export async function relayOutboxOnceForTests(): Promise<void> {
-  await relayOnce();
+/** Exported for tests — one relay tick, optionally scoped to one org. */
+export async function relayOutboxOnceForTests(options?: {
+  organizationId?: string;
+}): Promise<void> {
+  await relayOnce(options);
 }

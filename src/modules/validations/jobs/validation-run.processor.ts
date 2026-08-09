@@ -47,13 +47,21 @@ export async function processValidationRunJob(
  * the same day produces two distinct runs (auditable history), never a
  * duplicate of the same run.
  */
-export async function processDailyValidationSweep(): Promise<{
+export async function processDailyValidationSweep(options?: {
+  /** When set, only these orgs are swept (used by tests to avoid global fan-out). */
+  organizationIds?: string[];
+}): Promise<{
   runsCreated: number;
 }> {
   const runs = new ValidationRunRepository();
   const rules = new ValidationRuleRepository();
 
-  const orgIds = await rules.listActiveRuleOrganizationIds();
+  const activeOrgIds = await rules.listActiveRuleOrganizationIds();
+  const filter = options?.organizationIds?.filter(Boolean);
+  const orgIds =
+    filter && filter.length > 0
+      ? activeOrgIds.filter((id) => filter.includes(id))
+      : activeOrgIds;
   let runsCreated = 0;
 
   for (const organizationId of orgIds) {

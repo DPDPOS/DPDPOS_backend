@@ -50,9 +50,11 @@ export async function writeOutboxEvent(
  */
 export async function claimUnpublishedOutboxEvents(
   limit = 50,
+  options?: { organizationId?: string },
 ): Promise<ClaimedOutboxEvent[]> {
   const lockToken = randomUUID();
   const staleBefore = new Date(Date.now() - LOCK_STALE_MS);
+  const organizationId = options?.organizationId ?? null;
 
   const rows = await prisma.$queryRaw<
     Array<{
@@ -74,6 +76,10 @@ export async function claimUnpublishedOutboxEvents(
         AND attempts < ${MAX_ATTEMPTS}
         AND (available_at IS NULL OR available_at <= NOW())
         AND (locked_at IS NULL OR locked_at < ${staleBefore})
+        AND (
+          ${organizationId}::uuid IS NULL
+          OR organization_id = ${organizationId}::uuid
+        )
       ORDER BY created_at ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED

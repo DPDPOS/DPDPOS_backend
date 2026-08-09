@@ -7,6 +7,8 @@ import { OrganizationService } from "../../organizations/services/organization.s
 import { UserService } from "../services/user.service.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 describe("UserService", () => {
   const orgService = new OrganizationService();
   const userService = new UserService();
@@ -46,9 +48,7 @@ describe("UserService", () => {
       await prisma.role.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

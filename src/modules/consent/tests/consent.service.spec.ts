@@ -9,6 +9,8 @@ import { DataAssetService } from "../../inventory/services/data-asset.service.js
 import { NoticeService } from "../services/notice.service.js";
 import { ConsentRecordService } from "../services/consent-record.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -53,9 +55,7 @@ describe("Consent module (CON-001)", () => {
       await prisma.outboxEvent.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

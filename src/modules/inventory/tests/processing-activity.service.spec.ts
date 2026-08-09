@@ -8,6 +8,8 @@ import type { RequestContext } from "../../../shared/types/request-context.js";
 import { DataAssetService } from "../services/data-asset.service.js";
 import { ProcessingActivityService } from "../services/processing-activity.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -45,9 +47,7 @@ describe("ProcessingActivityService", () => {
       await prisma.outboxEvent.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

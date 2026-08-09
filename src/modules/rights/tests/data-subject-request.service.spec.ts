@@ -7,6 +7,8 @@ import type { RequestContext } from "../../../shared/types/request-context.js";
 
 import { DataSubjectRequestService } from "../services/data-subject-request.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -43,9 +45,7 @@ describe("Rights module (RGT-002)", () => {
       await prisma.outboxEvent.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

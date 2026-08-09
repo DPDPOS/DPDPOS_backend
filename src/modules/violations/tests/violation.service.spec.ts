@@ -14,6 +14,8 @@ import { ValidationExecutionService } from "../../validations/services/validatio
 
 import { ViolationService } from "../services/violation.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -40,33 +42,7 @@ describe("Violations module (VIO-004)", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.violation.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationResult.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRun.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRule.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-    }
-    if (createdUserIds.length > 0) {
-      await prisma.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-    if (createdOrgIds.length > 0) {
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

@@ -10,6 +10,8 @@ import {
 import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 import { PERMISSIONS } from "../../src/shared/constants/permissions.js";
 
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+
 /**
  * Cross-module happy path for Developer A:
  * org → roles → invite user → login → department → framework → controls → requirements
@@ -33,38 +35,7 @@ describe("Dev A end-to-end integration", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.refreshSession.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.requirement.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.control.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.framework.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.department.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.userRole.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.user.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

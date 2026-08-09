@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { OrganizationService } from "../services/organization.service.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
 
 describe("OrganizationService", () => {
   const service = new OrganizationService();
@@ -12,17 +13,7 @@ describe("OrganizationService", () => {
   });
 
   afterAll(async () => {
-    if (createdIds.length > 0) {
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdIds } },
-      });
-    }
+    await deleteTestOrganizations(createdIds);
     await prisma.$disconnect();
   });
 

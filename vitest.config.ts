@@ -12,5 +12,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.spec.ts", "src/modules/**/tests/**/*.spec.ts"],
     exclude: ["node_modules", "dist"],
+    // HTTP/integration specs share Redis/DB under parallel file runners.
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

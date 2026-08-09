@@ -13,6 +13,8 @@ import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { OrganizationService } from "../../organizations/services/organization.service.js";
 import { verifyAccessToken } from "../utils/jwt.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 describe("Auth JWT sessions HTTP API", () => {
   const app = createApp();
   const orgService = new OrganizationService();
@@ -72,9 +74,7 @@ describe("Auth JWT sessions HTTP API", () => {
       await prisma.role.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await disconnectRedis();
     await prisma.$disconnect();

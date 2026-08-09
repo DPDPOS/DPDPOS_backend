@@ -21,6 +21,8 @@ import { signAccessToken } from "../utils/jwt.js";
 import { encryptSecret } from "../utils/secret-crypto.js";
 import { OrganizationService } from "../../organizations/services/organization.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
   const app = createApp();
   const orgService = new OrganizationService();
@@ -54,9 +56,7 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
       await prisma.role.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await disconnectRedis();
     await prisma.$disconnect();
@@ -240,7 +240,7 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
       payload: { userId: randomUUID(), email: "outbox@example.com" },
     });
 
-    await relayOutboxOnceForTests();
+    await relayOutboxOnceForTests({ organizationId });
 
     const published = await prisma.outboxEvent.findMany({
       where: {

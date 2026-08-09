@@ -10,6 +10,8 @@ import {
 } from "../../src/infrastructure/cache/redis-client.js";
 import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+
 /**
  * Cross-module happy path for Developer B — Feature INV-002:
  * org → login → data asset → processing activity CRUD → soft delete → outbox
@@ -30,32 +32,7 @@ describe("Dev B processing activity end-to-end", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.processingActivity.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.dataAsset.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.refreshSession.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.userRole.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.user.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

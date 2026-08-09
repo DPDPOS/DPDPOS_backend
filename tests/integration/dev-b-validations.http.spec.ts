@@ -12,6 +12,8 @@ import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 import { validationExecutionService } from "../../src/modules/validations/services/validation-execution.service.js";
 import { validationRunService } from "../../src/modules/validations/services/validation-run.service.js";
 
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+
 /**
  * Cross-module happy path for Developer B — Feature VLD-003:
  * org → login → list seeded rules → trigger run → execute (worker path) →
@@ -32,35 +34,7 @@ describe("Dev B validation engine end-to-end", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.validationResult.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRun.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRule.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.refreshSession.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.userRole.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.user.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

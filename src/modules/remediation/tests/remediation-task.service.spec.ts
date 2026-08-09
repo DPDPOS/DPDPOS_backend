@@ -11,6 +11,8 @@ import type { RequestContext } from "../../../shared/types/request-context.js";
 
 import { RemediationTaskService } from "../services/remediation-task.service.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -35,27 +37,7 @@ describe("Remediation module (REM-005)", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.remediationTask.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.violation.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-    }
-    if (createdUserIds.length > 0) {
-      await prisma.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-    if (createdOrgIds.length > 0) {
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });

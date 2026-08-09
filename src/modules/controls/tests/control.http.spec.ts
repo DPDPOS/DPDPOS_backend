@@ -7,6 +7,8 @@ import { signAccessToken } from "../../auth/utils/jwt.js";
 import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 describe("Controls HTTP API", () => {
   const app = createApp();
   const createdOrgIds: string[] = [];
@@ -83,9 +85,7 @@ describe("Controls HTTP API", () => {
       await prisma.role.deleteMany({
         where: { organizationId: { in: createdOrgIds } },
       });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
+      await deleteTestOrganizations(createdOrgIds);
     }
     await prisma.$disconnect();
   });

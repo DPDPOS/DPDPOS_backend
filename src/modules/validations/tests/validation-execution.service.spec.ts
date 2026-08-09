@@ -19,6 +19,8 @@ import { ValidationExecutionService } from "../services/validation-execution.ser
 import { processDailyValidationSweep } from "../jobs/validation-run.processor.js";
 import { resolveEvaluator } from "../domain/rule.registry.js";
 
+import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+
 function makeContext(organizationId: string): RequestContext {
   return {
     correlationId: randomUUID(),
@@ -65,25 +67,9 @@ describe("Validation engine (VLD-003)", () => {
         where: { id: { in: createdAssetIds } },
       });
     }
-    if (createdOrgIds.length > 0) {
-      // Sweeps create SCHEDULED runs for every org with active rules, so wipe
-      // results/runs/rules org-wide rather than by id.
-      await prisma.validationResult.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRun.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.validationRule.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    // Sweeps can create SCHEDULED runs for orgs with active rules; helper
+    // wipes results/runs/rules (and violations holding result FKs) in order.
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });
@@ -166,8 +152,8 @@ describe("Validation engine (VLD-003)", () => {
         eventType: DOMAIN_EVENTS.ValidationFailed,
       },
     });
+    // Existence only — parallel suites may relay unpublished outbox rows.
     expect(failedOutbox).not.toBeNull();
-    expect(failedOutbox?.publishedAt).toBeNull();
   });
 
   it("skips re-executing a completed run (idempotency guard)", async () => {
@@ -348,15 +334,18 @@ describe("Validation engine (VLD-003)", () => {
     createdRunIds.push(run.id);
     await executionService.executeRun(run.id);
 
-    const sweep = await processDailyValidationSweep();
+    // Scope to this org — a global sweep would fan out across leftover DB orgs
+    // and race cleanup / Redis workers during the suite.
+    const sweep = await processDailyValidationSweep({
+      organizationIds: [orgId],
+    });
 
-    // Only orgs with active rules are swept — ours has 5.
-    expect(sweep.runsCreated).toBeGreaterThanOrEqual(1);
+    expect(sweep.runsCreated).toBe(1);
 
     const scheduled = await prisma.validationRun.findMany({
       where: { organizationId: orgId, triggerType: "SCHEDULED" },
     });
-    expect(scheduled.length).toBeGreaterThanOrEqual(1);
+    expect(scheduled).toHaveLength(1);
     expect(scheduled[0].status).toBe("PENDING");
     scheduled.forEach((s) => createdRunIds.push(s.id));
   });

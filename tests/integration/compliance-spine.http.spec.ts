@@ -5,6 +5,7 @@ import { createApp } from "../../src/app.js";
 import { prisma } from "../../src/infrastructure/database/prisma-client.js";
 import { signAccessToken } from "../../src/modules/auth/utils/jwt.js";
 import { ALL_PERMISSIONS } from "../../src/shared/constants/permissions.js";
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
 
 function authHeader(organizationId: string, userId = randomUUID()): string {
   const token = signAccessToken({
@@ -40,21 +41,7 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
       await prisma.$disconnect();
       return;
     }
-    await prisma.assessmentAuditEvent.deleteMany({ where: { organizationId } });
-    await prisma.assessmentReport.deleteMany({ where: { organizationId } });
-    await prisma.assessmentControlResult.deleteMany({ where: { organizationId } });
-    await prisma.cliFinding.deleteMany({ where: { organizationId } });
-    await prisma.scanJob.deleteMany({ where: { organizationId } });
-    await prisma.cliToken.deleteMany({ where: { organizationId } });
-    await prisma.questionnaireAnswer.deleteMany({ where: { organizationId } });
-    await prisma.assessmentDocument.deleteMany({ where: { organizationId } });
-    await prisma.assessmentVersion.deleteMany({ where: { organizationId } });
-    await prisma.assessment.deleteMany({ where: { organizationId } });
-    await prisma.remediationTask.deleteMany({ where: { organizationId } });
-    await prisma.violation.deleteMany({ where: { organizationId } });
-    await prisma.outboxEvent.deleteMany({ where: { organizationId } });
-    await prisma.role.deleteMany({ where: { organizationId } });
-    await prisma.organization.deleteMany({ where: { id: organizationId } });
+    await deleteTestOrganizations([organizationId]);
     await prisma.$disconnect();
   });
 

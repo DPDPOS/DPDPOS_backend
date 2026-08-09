@@ -10,6 +10,8 @@ import {
 } from "../../src/infrastructure/cache/redis-client.js";
 import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 
+import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+
 /**
  * Cross-module happy path for Developer B — Feature RGT-002:
  * org → login → submit request → assign → respond → close → outbox
@@ -31,29 +33,7 @@ describe("Dev B rights management end-to-end", () => {
   });
 
   afterAll(async () => {
-    if (createdOrgIds.length > 0) {
-      await prisma.dataSubjectRequest.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.outboxEvent.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.refreshSession.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.userRole.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.user.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.role.deleteMany({
-        where: { organizationId: { in: createdOrgIds } },
-      });
-      await prisma.organization.deleteMany({
-        where: { id: { in: createdOrgIds } },
-      });
-    }
+    await deleteTestOrganizations(createdOrgIds);
     await disconnectRedis();
     await prisma.$disconnect();
   });
@@ -62,7 +42,9 @@ describe("Dev B rights management end-to-end", () => {
     return `Bearer ${token}`;
   }
 
-  it("runs the full rights request lifecycle", async () => {
+  it(
+    "runs the full rights request lifecycle",
+    async () => {
     // 1) Organization (seeds system roles)
     const orgRes = await request(app)
       .post("/api/v1/organizations")
@@ -323,5 +305,7 @@ describe("Dev B rights management end-to-end", () => {
       },
     });
     expect(closedEvent).not.toBeNull();
-  });
+    },
+    30_000,
+  );
 });
