@@ -50,12 +50,15 @@ export class AssessmentController {
   }
 
   async questionnaireCatalog(
-    _req: AuthenticatedRequest,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ) {
     try {
-      sendSuccess(res, assessmentService.getQuestionnaireCatalog());
+      sendSuccess(
+        res,
+        await assessmentService.getQuestionnaireCatalog(getRequestContext(req)),
+      );
     } catch (err) {
       next(err);
     }

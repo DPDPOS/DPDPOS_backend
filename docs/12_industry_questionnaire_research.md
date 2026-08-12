@@ -1,6 +1,6 @@
 # Industry-dynamic DPDP questionnaire — research & finalization
 
-Status: **PENDING APPROVAL** (do not implement until signed off)  
+Status: **IMPLEMENTED** (core + 6 industry packs; catalog keyed off `Organization.industry`)  
 Goal: Make assessment questionnaire **dynamic by organisation industry**, starting with **6 domains**. Core DPDP duties stay shared; each domain adds questions that extract the sector-specific facts needed for readiness scoring and evidence gates.
 
 ---

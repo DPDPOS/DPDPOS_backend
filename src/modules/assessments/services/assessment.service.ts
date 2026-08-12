@@ -27,13 +27,14 @@ import type {
 } from "../dto/assessment.dto.js";
 import type { CliAuthContext } from "../middleware/authenticate-cli.middleware.js";
 import {
-  QUESTIONNAIRE_CATALOG,
-  listQuestionnaireStages,
+  buildQuestionnaireCatalogPayload,
+  getQuestionsForIndustry,
 } from "../domain/questionnaire-catalog.js";
 import {
   ASSESSMENT_DOCUMENT_TYPES,
   ASSESSMENT_DOCUMENT_TYPE_LABELS,
 } from "../domain/document-types.js";
+import { INDUSTRY_DOMAIN_OPTIONS } from "../domain/industry-domains.js";
 import { violationService } from "../../violations/services/violation.service.js";
 
 async function requireAssessment(organizationId: string, assessmentId: string) {
@@ -44,15 +45,25 @@ async function requireAssessment(organizationId: string, assessmentId: string) {
   return row;
 }
 
+async function organizationIndustry(organizationId: string): Promise<string | null> {
+  const org = await prisma.organization.findFirst({
+    where: { id: organizationId },
+    select: { industry: true },
+  });
+  return org?.industry ?? null;
+}
+
 export class AssessmentService {
-  getQuestionnaireCatalog() {
+  async getQuestionnaireCatalog(ctx: RequestContext) {
+    const industry = await organizationIndustry(ctx.organizationId);
+    const catalog = buildQuestionnaireCatalogPayload(industry);
     return {
-      questions: QUESTIONNAIRE_CATALOG,
-      stages: listQuestionnaireStages(),
+      ...catalog,
       documentTypes: ASSESSMENT_DOCUMENT_TYPES.map((value) => ({
         value,
         label: ASSESSMENT_DOCUMENT_TYPE_LABELS[value],
       })),
+      industryOptions: INDUSTRY_DOMAIN_OPTIONS,
     };
   }
 
@@ -572,13 +583,15 @@ export class AssessmentService {
     ]);
 
     const readyDocs = documents.filter((d) => d.uploadStatus === "READY");
-    const requiredCodes = QUESTIONNAIRE_CATALOG.filter((q) => q.required !== false).map(
-      (q) => q.code,
-    );
+    const industry = await organizationIndustry(ctx.organizationId);
+    const catalogQuestions = getQuestionsForIndustry(industry);
+    const requiredCodes = catalogQuestions
+      .filter((q) => q.required !== false)
+      .map((q) => q.code);
     // Soft showIf: only require unconditionally visible required questions.
     const answeredCodes = new Set(answers.map((a) => a.questionCode));
     const missingRequired = requiredCodes.filter((code) => {
-      const q = QUESTIONNAIRE_CATALOG.find((row) => row.code === code);
+      const q = catalogQuestions.find((row) => row.code === code);
       if (!q) return false;
       if (q.showIf) {
         const prior = answers.find((a) => a.questionCode === q.showIf!.code);

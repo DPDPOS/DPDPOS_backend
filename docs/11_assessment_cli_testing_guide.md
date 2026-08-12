@@ -34,6 +34,7 @@ npm run dev
 - Frontend: http://localhost:3001/login  
 - Seed admin: `admin@demo.dpdpos.local` / `ChangeMe123!`  
   Org: `00000000-0000-4000-8000-000000000001`
+- Set **Industry** in Settings (6 domains) so the questionnaire includes the sector pack
 
 ## Evaluator path (full-page onboarding)
 

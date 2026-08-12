@@ -7,11 +7,11 @@ const prisma = new PrismaClient();
 async function main() {
   const org = await prisma.organization.upsert({
     where: { id: "00000000-0000-4000-8000-000000000001" },
-    update: {},
+    update: { industry: "banking_finance" },
     create: {
       id: "00000000-0000-4000-8000-000000000001",
       name: "Demo Data Fiduciary Pvt Ltd",
-      industry: "Financial Services",
+      industry: "banking_finance",
       companySize: "201-1000",
       operatingRegion: "IN",
       companyType: "Private Limited",
