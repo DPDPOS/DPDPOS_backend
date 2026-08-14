@@ -56,7 +56,7 @@ export class OidcService {
         clientId: dto.clientId,
         ...(secretEnc ? { clientSecretEnc: secretEnc } : {}),
         tenantId: dto.tenantId ?? null,
-        scopes: dto.scopes ?? "openid profile email",
+        scopes: dto.scopes ?? "openid profile email User.Read GroupMember.Read.All",
       });
     }
 
@@ -69,7 +69,7 @@ export class OidcService {
       clientId: dto.clientId,
       clientSecretEnc: secretEnc ?? null,
       tenantId: dto.tenantId ?? null,
-      scopes: dto.scopes ?? "openid profile email",
+      scopes: dto.scopes ?? "openid profile email User.Read GroupMember.Read.All",
     });
   }
 
@@ -109,7 +109,8 @@ export class OidcService {
     );
 
     const redirectUri = `${appConfig.apiPublicUrl}/api/v1/auth/oidc/callback`;
-    const scopes = provider.scopes || "openid profile email";
+    const scopes =
+      provider.scopes || "openid profile email User.Read GroupMember.Read.All";
     const url = new URL(disco.authorization_endpoint);
     url.searchParams.set("client_id", provider.clientId);
     url.searchParams.set("response_type", "code");
@@ -212,18 +213,14 @@ export class OidcService {
       groupIds = payload.groups.map(String);
     }
 
-    // Graph overage: if groups claim is absent but we have an access token, best-effort fetch
-    if (groupIds.length === 0 && tokenJson.access_token) {
+    if (tokenJson.access_token) {
       try {
-        const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/memberOf?$select=id,displayName", {
-          headers: { Authorization: `Bearer ${tokenJson.access_token}` },
-        });
-        if (graphRes.ok) {
-          const graphJson = (await graphRes.json()) as {
-            value?: Array<{ id?: string }>;
-          };
-          groupIds = (graphJson.value ?? []).map((g) => String(g.id)).filter(Boolean);
-        }
+        const { fetchGraphMemberGroups } = await import("./graph-sync.service.js");
+        const fromGraph = await fetchGraphMemberGroups(
+          tokenJson.access_token,
+          "me/memberOf?$select=id,displayName",
+        );
+        groupIds = [...new Set([...groupIds, ...fromGraph])];
       } catch {
         // optional; group maps simply won't apply
       }

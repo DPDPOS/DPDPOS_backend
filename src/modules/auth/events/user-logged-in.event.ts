@@ -7,6 +7,7 @@ export type UserLoggedInPayload = {
   userId: string;
   email: string;
   sessionId?: string;
+  authSource?: string;
 };
 
 export type UserLoggedInEvent = BaseDomainEvent<UserLoggedInPayload>;

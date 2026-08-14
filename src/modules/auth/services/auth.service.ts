@@ -479,6 +479,7 @@ export class AuthService {
         payload: {
           userId: user.id,
           email: user.email,
+          authSource: user.authSource,
         },
       });
     }

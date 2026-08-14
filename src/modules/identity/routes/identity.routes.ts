@@ -103,5 +103,19 @@ export function createIdentityAdminRouter(): Router {
     (req, res, next) => void identityController.deleteGroupMap(req, res, next),
   );
 
+  router.post(
+    "/sync",
+    authenticate,
+    requirePermission(identityPermissions.sync),
+    (req, res, next) => void identityController.syncDirectory(req, res, next),
+  );
+
+  router.post(
+    "/entra/group-scopes",
+    authenticate,
+    requirePermission(identityPermissions.update),
+    (req, res, next) => void identityController.enableEntraGroupScopes(req, res, next),
+  );
+
   return router;
 }

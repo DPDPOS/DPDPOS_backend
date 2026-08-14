@@ -5,6 +5,10 @@ import { ConflictError, ForbiddenError, ValidationError } from "../../../shared/
 import { invalidateUserPermissions } from "../../../infrastructure/cache/permission-cache.js";
 import { identityGroupMapRepository } from "../repositories/identity-group-map.repository.js";
 import { identitySettingsRepository } from "../repositories/identity-settings.repository.js";
+import {
+  expandDirectoryGroupKeys,
+  mapMatchesIncomingGroups,
+} from "../domain/group-keys.js";
 
 export type FederatedIdentity = {
   organizationId: string;
@@ -123,6 +127,14 @@ export class FederatedUserService {
       }
     }
 
+    // Existing federated users created before defaultRole was configured still
+    // get a baseline role so they are not stuck with zero permissions.
+    await this.ensureDefaultRoleIfEmpty({
+      organizationId: identity.organizationId,
+      userId,
+      defaultRoleName: settings.defaultRoleName,
+    });
+
     await this.applyGroupRoles({
       organizationId: identity.organizationId,
       providerId: identity.providerId,
@@ -134,18 +146,51 @@ export class FederatedUserService {
     return { userId };
   }
 
+  private async ensureDefaultRoleIfEmpty(input: {
+    organizationId: string;
+    userId: string;
+    defaultRoleName: string | null;
+  }): Promise<void> {
+    if (!input.defaultRoleName) return;
+    const count = await prisma.userRole.count({
+      where: { organizationId: input.organizationId, userId: input.userId },
+    });
+    if (count > 0) return;
+    const role = await prisma.role.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        name: input.defaultRoleName,
+        deletedAt: null,
+      },
+    });
+    if (!role) return;
+    await prisma.userRole.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.organizationId,
+        userId: input.userId,
+        roleId: role.id,
+      },
+    });
+  }
+
   async applyGroupRoles(input: {
     organizationId: string;
     providerId: string;
     userId: string;
     groupIds: string[];
   }): Promise<void> {
-    const mappedRoleIds = await identityGroupMapRepository.findRoleIdsForGroups(
+    const maps = await identityGroupMapRepository.list(
       input.organizationId,
       input.providerId,
-      input.groupIds,
     );
-    if (mappedRoleIds.length === 0) return;
+    if (maps.length === 0) return;
+
+    const incoming = new Set(expandDirectoryGroupKeys(input.groupIds));
+    const mappedNow = new Set(
+      maps.filter((m) => mapMatchesIncomingGroups(m, incoming)).map((m) => m.roleId),
+    );
+    const mappable = new Set(maps.map((m) => m.roleId));
 
     const existing = await prisma.userRole.findMany({
       where: { userId: input.userId, organizationId: input.organizationId },
@@ -153,11 +198,22 @@ export class FederatedUserService {
     });
     const existingSet = new Set(existing.map((e) => e.roleId));
 
-    for (const roleId of mappedRoleIds) {
+    for (const roleId of mappedNow) {
       if (existingSet.has(roleId)) continue;
       await prisma.userRole.create({
         data: {
           id: randomUUID(),
+          organizationId: input.organizationId,
+          userId: input.userId,
+          roleId,
+        },
+      });
+    }
+
+    for (const roleId of existingSet) {
+      if (!mappable.has(roleId) || mappedNow.has(roleId)) continue;
+      await prisma.userRole.deleteMany({
+        where: {
           organizationId: input.organizationId,
           userId: input.userId,
           roleId,

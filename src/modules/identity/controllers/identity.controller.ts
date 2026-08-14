@@ -151,6 +151,24 @@ export const identityController = {
     }
   },
 
+  async syncDirectory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = getRequestContext(req);
+      sendSuccess(res, await identityAdminService.syncDirectory(ctx.organizationId));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async enableEntraGroupScopes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = getRequestContext(req);
+      sendSuccess(res, await identityAdminService.enableEntraGroupScopes(ctx.organizationId));
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async oidcStart(req: Request, res: Response, next: NextFunction) {
     try {
       const organizationId = String(req.query.organizationId ?? "");

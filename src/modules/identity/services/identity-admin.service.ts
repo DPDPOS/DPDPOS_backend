@@ -141,6 +141,19 @@ export class IdentityAdminService {
     if (result.count === 0) throw new NotFoundError("Group map not found");
     return { deleted: true };
   }
+
+  async syncDirectory(organizationId: string) {
+    const { graphSyncService } = await import("./graph-sync.service.js");
+    return graphSyncService.syncOrganization(organizationId);
+  }
+
+  async enableEntraGroupScopes(organizationId: string) {
+    const provider = await identityProviderRepository.findEnabledByType(organizationId, "OIDC");
+    if (!provider) throw new NotFoundError("No enabled Entra OIDC provider");
+    const scopes = "openid profile email User.Read GroupMember.Read.All";
+    const row = await identityProviderRepository.update(provider.id, { scopes });
+    return sanitizeProvider(row);
+  }
 }
 
 export const identityAdminService = new IdentityAdminService();

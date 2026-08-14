@@ -13,12 +13,12 @@
 | Permissions `identity:read\|update\|sync` + role grants | Done (ORG_ADMIN/DPO/AUDITOR; existing orgs updated in migration) |
 | OIDC (Entra) PKCE start → callback → Redis exchange → frontend `/login/sso` | Done |
 | LDAP/LDAPS Windows AD bind login | Done |
-| JIT provisioning + group→role maps | Done (on login) |
+| JIT provisioning + group→role maps | Done (on login + Settings UI; Entra Graph sync endpoint) |
 | Password login + LOCAL default unchanged | Done (`enforceSso` off by default; fail-open if identity unavailable) |
-| Frontend login SSO buttons + Settings identity panel | Done |
+| Frontend login SSO buttons + Settings identity panel | Done (providers, default JIT role, group maps, sync) |
 | CLI | Unchanged auth model — docs note SSO does not affect `dpdp_…` tokens |
 | SAML assertion ACS | Config storage only (stub) |
-| Microsoft Graph directory sync worker | Deferred |
+| Microsoft Graph directory sync worker | On-demand `POST /api/v1/identity/sync` (client credentials). Background worker still optional. |
 | Device-code CLI SSO | Deferred (not required) |
 
 **Deploy note:** run `npx prisma migrate deploy` (and re-seed demo org if you want presets refreshed) before enabling providers. Until then, password login remains the path.
