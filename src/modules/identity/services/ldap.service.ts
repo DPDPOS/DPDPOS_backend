@@ -1,6 +1,7 @@
 import { Client } from "ldapts";
 import {
   NotFoundError,
+  ServiceUnavailableError,
   UnauthorizedError,
   ValidationError,
 } from "../../../shared/errors/app-error.js";
@@ -18,6 +19,14 @@ export class LdapService {
     if (!dto.ldapHost || !dto.ldapBaseDn || !dto.ldapUserFilter) {
       throw new ValidationError("LDAP requires host, base DN, and user filter");
     }
+    const ldapHost = dto.ldapHost
+      .replace(/^ldaps?:\/\//i, "")
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      ?.split(":")[0];
+    if (!ldapHost) {
+      throw new ValidationError("LDAP host must be a hostname like localhost, not a URL");
+    }
 
     const bindDnEnc =
       dto.ldapBindDn !== undefined && dto.ldapBindDn !== null
@@ -33,12 +42,13 @@ export class LdapService {
       if (!existing || existing.type !== "LDAP") {
         throw new NotFoundError("LDAP provider not found");
       }
+      const useTls = dto.ldapUseTls ?? existing.ldapUseTls ?? false;
       return identityProviderRepository.update(providerId, {
         name: dto.name,
         enabled: dto.enabled ?? existing.enabled,
-        ldapHost: dto.ldapHost,
-        ldapPort: dto.ldapPort ?? 636,
-        ldapUseTls: dto.ldapUseTls ?? true,
+        ldapHost,
+        ldapPort: dto.ldapPort ?? existing.ldapPort ?? (useTls ? 636 : 389),
+        ldapUseTls: useTls,
         ...(bindDnEnc ? { ldapBindDnEnc: bindDnEnc } : {}),
         ...(bindPwEnc ? { ldapBindPasswordEnc: bindPwEnc } : {}),
         ldapBaseDn: dto.ldapBaseDn,
@@ -46,14 +56,15 @@ export class LdapService {
       });
     }
 
+    const useTls = dto.ldapUseTls ?? false;
     return identityProviderRepository.create({
       organization: { connect: { id: organizationId } },
       type: "LDAP",
       name: dto.name,
       enabled: dto.enabled ?? false,
-      ldapHost: dto.ldapHost,
-      ldapPort: dto.ldapPort ?? 636,
-      ldapUseTls: dto.ldapUseTls ?? true,
+      ldapHost,
+      ldapPort: dto.ldapPort ?? (useTls ? 636 : 389),
+      ldapUseTls: useTls,
       ldapBindDnEnc: bindDnEnc ?? null,
       ldapBindPasswordEnc: bindPwEnc ?? null,
       ldapBaseDn: dto.ldapBaseDn,
@@ -73,7 +84,9 @@ export class LdapService {
       throw new NotFoundError("No enabled Windows AD / LDAP provider for this organization");
     }
 
-    const url = `${provider.ldapUseTls === false ? "ldap" : "ldaps"}://${provider.ldapHost}:${provider.ldapPort ?? 636}`;
+    const scheme = provider.ldapUseTls === false ? "ldap" : "ldaps";
+    const port = provider.ldapPort ?? (scheme === "ldaps" ? 636 : 389);
+    const url = `${scheme}://${provider.ldapHost}:${port}`;
     const client = new Client({ url, timeout: 10_000, connectTimeout: 10_000 });
 
     try {
@@ -156,6 +169,22 @@ export class LdapService {
         meta,
         { mfaVerified: false },
       );
+    } catch (err) {
+      if (
+        err instanceof UnauthorizedError ||
+        err instanceof NotFoundError ||
+        err instanceof ValidationError ||
+        err instanceof ServiceUnavailableError
+      ) {
+        throw err;
+      }
+      const code = (err as { code?: string }).code;
+      if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || err instanceof AggregateError) {
+        throw new ServiceUnavailableError(
+          `Cannot reach LDAP at ${url}. For local OpenLDAP use host "localhost", port 389, and leave LDAPS unchecked.`,
+        );
+      }
+      throw err;
     } finally {
       await client.unbind().catch(() => undefined);
     }

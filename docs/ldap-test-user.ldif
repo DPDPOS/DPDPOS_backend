@@ -1,0 +1,12 @@
+dn: uid=jsmith,dc=dpdpos,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: Jane Smith
+sn: Smith
+uid: jsmith
+mail: jsmith@dpdpos.local
+userPassword: Password123!
+uidNumber: 1001
+gidNumber: 500
+homeDirectory: /home/jsmith

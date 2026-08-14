@@ -19,6 +19,7 @@ export class IdentityProviderRepository {
   findEnabledByType(organizationId: string, type: IdentityProviderType) {
     return prisma.identityProvider.findFirst({
       where: { organizationId, type, enabled: true, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
     });
   }
 
