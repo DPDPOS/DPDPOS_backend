@@ -69,6 +69,12 @@ export async function deleteTestOrganizations(
     await prisma.outboxEvent.deleteMany({ where: orgWhere });
     await prisma.refreshSession.deleteMany({ where: orgWhere });
 
+    // Identity (SSO / AD / Entra) — created on login via getOrCreate
+    await prisma.identityGroupRoleMap.deleteMany({ where: orgWhere });
+    await prisma.identitySyncRun.deleteMany({ where: orgWhere });
+    await prisma.identityProvider.deleteMany({ where: orgWhere });
+    await prisma.organizationIdentitySettings.deleteMany({ where: orgWhere });
+
     // IAM
     await prisma.userRole.deleteMany({ where: orgWhere });
     await prisma.department.deleteMany({ where: orgWhere });
