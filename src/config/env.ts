@@ -28,8 +28,9 @@ const envSchema = z.object({
     .transform((value) => value || undefined),
   AI_MODEL: z.string().optional(),
   AI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
-  API_PUBLIC_URL: z.string().url().default("http://127.0.0.1:3000"),
-  FRONTEND_PUBLIC_URL: z.string().url().default("http://127.0.0.1:3001"),
+  // Use localhost (not 127.0.0.1): Entra only allows http://localhost redirect URIs.
+  API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
+  FRONTEND_PUBLIC_URL: z.string().url().default("http://localhost:3001"),
 });
 
 export type Env = z.infer<typeof envSchema>;
