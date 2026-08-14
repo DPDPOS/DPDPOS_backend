@@ -434,7 +434,7 @@ export class AuthService {
     tx: Prisma.TransactionClient,
     user: Pick<
       AuthUserRecord,
-      "id" | "organizationId" | "email" | "roleNames" | "permissions"
+      "id" | "organizationId" | "email" | "roleNames" | "permissions" | "authSource"
     >,
     meta: { userAgent?: string; ipAddress?: string },
     options: {
