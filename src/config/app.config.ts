@@ -12,4 +12,6 @@ export const appConfig = {
     refreshTtlSeconds: env.JWT_REFRESH_TTL_SECONDS,
   },
   outboxPollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+  apiPublicUrl: env.API_PUBLIC_URL.replace(/\/$/, ""),
+  frontendPublicUrl: env.FRONTEND_PUBLIC_URL.replace(/\/$/, ""),
 } as const;

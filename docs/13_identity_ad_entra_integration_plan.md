@@ -1,10 +1,27 @@
 # Identity integration plan — Windows AD, Microsoft Entra ID, Entra + Microsoft 365
 
-**Product:** DPDPOS (backend + CLI)  
-**Status:** Plan (not yet implemented)  
+**Product:** DPDPOS (backend + CLI + frontend)  
+**Status:** MVP implemented (LOCAL default; OIDC Entra + LDAP AD live; SAML config stub; Graph sync deferred)  
 **Date:** 2026-08-14  
 **Depends on current auth:** org-scoped email/password, JWT access + refresh, in-app TOTP MFA for privileged roles, assessment CLI tokens (`dpdp_…`)
 
+### Implementation status (2026-08-14)
+
+| Area | Status |
+|---|---|
+| Prisma: `authSource`, identity settings/providers/group maps/sync runs | Done — migration `20260814090000_identity_ad_entra` |
+| Permissions `identity:read\|update\|sync` + role grants | Done (ORG_ADMIN/DPO/AUDITOR; existing orgs updated in migration) |
+| OIDC (Entra) PKCE start → callback → Redis exchange → frontend `/login/sso` | Done |
+| LDAP/LDAPS Windows AD bind login | Done |
+| JIT provisioning + group→role maps | Done (on login) |
+| Password login + LOCAL default unchanged | Done (`enforceSso` off by default; fail-open if identity unavailable) |
+| Frontend login SSO buttons + Settings identity panel | Done |
+| CLI | Unchanged auth model — docs note SSO does not affect `dpdp_…` tokens |
+| SAML assertion ACS | Config storage only (stub) |
+| Microsoft Graph directory sync worker | Deferred |
+| Device-code CLI SSO | Deferred (not required) |
+
+**Deploy note:** run `npx prisma migrate deploy` (and re-seed demo org if you want presets refreshed) before enabling providers. Until then, password login remains the path.
 ---
 
 ## 0. What faculty asked for (and how they differ)

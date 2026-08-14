@@ -27,6 +27,10 @@ import { createAnalyticsRouter } from "../modules/analytics/index.js";
 import { createReportRouter } from "../modules/reports/index.js";
 import { createAiRouter } from "../modules/ai/index.js";
 import { createAssessmentRouter } from "../modules/assessments/index.js";
+import {
+  createIdentityAdminRouter,
+  createIdentityAuthRouter,
+} from "../modules/identity/index.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -48,6 +52,8 @@ export function registerRoutes(app: Express): void {
 
   const v1 = "/api/v1";
   app.use(`${v1}/auth`, createAuthRouter());
+  app.use(`${v1}/auth`, createIdentityAuthRouter());
+  app.use(`${v1}/identity`, createIdentityAdminRouter());
   app.use(`${v1}/organizations`, createOrganizationsRouter());
   app.use(`${v1}/users`, createUsersRouter());
   app.use(`${v1}/roles`, createRolesRouter());

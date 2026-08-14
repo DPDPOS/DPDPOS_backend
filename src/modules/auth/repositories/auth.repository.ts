@@ -11,6 +11,7 @@ export type AuthUserRecord = {
   name: string;
   passwordHash: string | null;
   status: UserStatus;
+  authSource: string;
   mfaEnabled: boolean;
   mfaSecretEnc: string | null;
   roleNames: string[];
@@ -24,6 +25,7 @@ function mapAuthUser(row: {
   name: string;
   passwordHash: string | null;
   status: UserStatus;
+  authSource: string;
   mfaEnabled: boolean;
   mfaSecretEnc: string | null;
   userRoles: Array<{
@@ -41,6 +43,7 @@ function mapAuthUser(row: {
     name: row.name,
     passwordHash: row.passwordHash,
     status: row.status,
+    authSource: row.authSource,
     mfaEnabled: row.mfaEnabled,
     mfaSecretEnc: row.mfaSecretEnc,
     roleNames: activeRoles.map((role) => role.name),

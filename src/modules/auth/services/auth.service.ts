@@ -86,6 +86,13 @@ export class AuthService {
     input: LoginDto,
     meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
   ): Promise<LoginResult> {
+    const settings = await this.safeIdentitySettings(input.organizationId);
+    if (settings.enforceSso && !settings.allowLocalBreakGlass) {
+      throw new UnauthorizedError(
+        "Password login is disabled for this organization. Use directory SSO.",
+      );
+    }
+
     const user = await this.repo.findUserForLogin({
       organizationId: input.organizationId,
       email: input.email.trim().toLowerCase(),
@@ -96,6 +103,11 @@ export class AuthService {
     }
     if (user.status === "DISABLED") {
       throw new UnauthorizedError("Account is disabled");
+    }
+    if (settings.enforceSso && user.authSource !== "LOCAL") {
+      throw new UnauthorizedError(
+        "This account must sign in with directory SSO.",
+      );
     }
 
     const passwordOk = await argon2.verify(user.passwordHash, input.password);
@@ -301,7 +313,69 @@ export class AuthService {
   async me(ctx: RequestContext): Promise<AuthMeResponse> {
     const user = await this.requireActiveUser(ctx);
     const privileged = isPrivilegedRoleSet(user.roleNames);
-    return this.toMe(user, privileged && !user.mfaEnabled);
+    const skipLocalTotp =
+      user.authSource !== "LOCAL" &&
+      (await this.shouldSkipLocalTotp(user.organizationId));
+    return this.toMe(user, privileged && !user.mfaEnabled && !skipLocalTotp);
+  }
+
+  /** Used by identity federation after IdP proof. Does not verify password. */
+  async completeFederatedLogin(
+    input: { organizationId: string; userId: string },
+    meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
+    options: { mfaVerified: boolean } = { mfaVerified: false },
+  ): Promise<LoginSuccessResult> {
+    const user = await this.repo.findUserById(input);
+    if (!user || user.status === "DISABLED") {
+      throw new UnauthorizedError("Account is disabled");
+    }
+
+    const activateIfInvited = user.status === "INVITED";
+    const tokens = await this.issueSession(user, meta, {
+      emitLoginEvent: true,
+      activateIfInvited,
+      correlationId: meta.correlationId,
+      mfaVerified: options.mfaVerified,
+    });
+
+    const privileged = isPrivilegedRoleSet(user.roleNames);
+    const skipLocalTotp = await this.shouldSkipLocalTotp(user.organizationId);
+
+    return {
+      mfaRequired: false,
+      user: this.toMe(
+        { ...user, status: activateIfInvited ? "ACTIVE" : user.status },
+        privileged && !user.mfaEnabled && !skipLocalTotp,
+      ),
+      tokens,
+      mfaEnrollmentRequired: privileged && !user.mfaEnabled && !skipLocalTotp,
+    };
+  }
+
+  private async safeIdentitySettings(organizationId: string): Promise<{
+    enforceSso: boolean;
+    allowLocalBreakGlass: boolean;
+    disableLocalTotpWhenFederated: boolean;
+  }> {
+    try {
+      const { identitySettingsService } = await import(
+        "../../identity/services/identity-settings.service.js"
+      );
+      return await identitySettingsService.getOrCreate(organizationId);
+    } catch {
+      // Fail open to LOCAL defaults so password login keeps working if identity
+      // tables are not yet migrated or temporarily unavailable.
+      return {
+        enforceSso: false,
+        allowLocalBreakGlass: true,
+        disableLocalTotpWhenFederated: true,
+      };
+    }
+  }
+
+  private async shouldSkipLocalTotp(organizationId: string): Promise<boolean> {
+    const settings = await this.safeIdentitySettings(organizationId);
+    return settings.disableLocalTotpWhenFederated;
   }
 
   private async requireActiveUser(ctx: RequestContext): Promise<AuthUserRecord> {

@@ -23,6 +23,27 @@ enum UserStatus {
   DISABLED
 }
 
+enum IdentityMode {
+  LOCAL
+  LDAP_AD
+  OIDC_ENTRA
+  SAML_ADFS
+  HYBRID
+}
+
+enum IdentityProviderType {
+  LDAP
+  OIDC
+  SAML
+}
+
+enum UserAuthSource {
+  LOCAL
+  LDAP
+  OIDC
+  SAML
+}
+
 enum FrameworkStatus {
   DRAFT
   PUBLISHED
@@ -76,27 +97,35 @@ model Organization {
   aiUsageLogs          AiUsageLog[]
   remediationTasks     RemediationTask[]
   assessments          Assessment[]
+  identitySettings     OrganizationIdentitySettings?
+  identityProviders    IdentityProvider[]
+  identityGroupRoleMaps IdentityGroupRoleMap[]
+  identitySyncRuns     IdentitySyncRun[]
 
   @@map("organizations")
 }
 
 model User {
-  id              String     @id @default(uuid()) @db.Uuid
-  organizationId  String     @map("organization_id") @db.Uuid
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
   email           String
   name            String
-  passwordHash    String?    @map("password_hash")
-  status          UserStatus @default(INVITED)
-  mfaEnabled      Boolean    @default(false) @map("mfa_enabled")
-  mfaSecretEnc    String?    @map("mfa_secret_enc")
-  inviteTokenHash String?    @map("invite_token_hash")
-  inviteExpiresAt DateTime?  @map("invite_expires_at")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  createdBy       String?    @map("created_by") @db.Uuid
-  updatedBy       String?    @map("updated_by") @db.Uuid
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
-  deletedAt       DateTime?  @map("deleted_at")
+  passwordHash    String?        @map("password_hash")
+  status          UserStatus     @default(INVITED)
+  authSource      UserAuthSource @default(LOCAL) @map("auth_source")
+  externalSubject String?        @map("external_subject")
+  externalIssuer  String?        @map("external_issuer")
+  upn             String?
+  mfaEnabled      Boolean        @default(false) @map("mfa_enabled")
+  mfaSecretEnc    String?        @map("mfa_secret_enc")
+  inviteTokenHash String?        @map("invite_token_hash")
+  inviteExpiresAt DateTime?      @map("invite_expires_at")
+  lastLoginAt     DateTime?      @map("last_login_at")
+  createdBy       String?        @map("created_by") @db.Uuid
+  updatedBy       String?        @map("updated_by") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
 
   organization             Organization         @relation(fields: [organizationId], references: [id])
   userRoles                UserRole[]
@@ -108,9 +137,103 @@ model User {
   assignedRemediationTasks RemediationTask[]    @relation("RemediationTaskAssignee")
 
   @@unique([organizationId, email])
+  @@unique([organizationId, externalSubject])
   @@index([organizationId, status])
+  @@index([organizationId, upn])
   @@index([inviteTokenHash])
   @@map("users")
+}
+
+model OrganizationIdentitySettings {
+  id                             String       @id @default(uuid()) @db.Uuid
+  organizationId                 String       @unique @map("organization_id") @db.Uuid
+  mode                           IdentityMode @default(LOCAL)
+  enforceSso                     Boolean      @default(false) @map("enforce_sso")
+  allowLocalBreakGlass           Boolean      @default(true) @map("allow_local_break_glass")
+  disableLocalTotpWhenFederated  Boolean      @default(true) @map("disable_local_totp_when_federated")
+  jitProvisioningEnabled         Boolean      @default(false) @map("jit_provisioning_enabled")
+  defaultRoleName                String?      @map("default_role_name")
+  createdAt                      DateTime     @default(now()) @map("created_at")
+  updatedAt                      DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("organization_identity_settings")
+}
+
+model IdentityProvider {
+  id               String               @id @default(uuid()) @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  type             IdentityProviderType
+  name             String
+  enabled          Boolean              @default(false)
+  // OIDC / Entra
+  issuer           String?
+  clientId         String?              @map("client_id")
+  clientSecretEnc  String?              @map("client_secret_enc")
+  tenantId         String?              @map("tenant_id")
+  scopes           String?              // space-separated
+  // SAML
+  entityId         String?              @map("entity_id")
+  acsUrl           String?              @map("acs_url")
+  idpMetadataUrl   String?              @map("idp_metadata_url")
+  idpCertificate   String?              @map("idp_certificate") @db.Text
+  // LDAP / Windows AD
+  ldapHost         String?              @map("ldap_host")
+  ldapPort         Int?                 @map("ldap_port")
+  ldapUseTls       Boolean?             @map("ldap_use_tls")
+  ldapBindDnEnc    String?              @map("ldap_bind_dn_enc")
+  ldapBindPasswordEnc String?           @map("ldap_bind_password_enc")
+  ldapBaseDn       String?              @map("ldap_base_dn")
+  ldapUserFilter   String?              @map("ldap_user_filter")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  deletedAt        DateTime?            @map("deleted_at")
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  groupMaps    IdentityGroupRoleMap[]
+  syncRuns     IdentitySyncRun[]
+
+  @@index([organizationId, type, enabled])
+  @@map("identity_providers")
+}
+
+model IdentityGroupRoleMap {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  providerId        String   @map("provider_id") @db.Uuid
+  externalGroupId   String   @map("external_group_id")
+  externalGroupName String?  @map("external_group_name")
+  roleId            String   @map("role_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  provider     IdentityProvider @relation(fields: [providerId], references: [id])
+  role         Role            @relation(fields: [roleId], references: [id])
+
+  @@unique([organizationId, providerId, externalGroupId, roleId])
+  @@index([organizationId, providerId])
+  @@map("identity_group_role_maps")
+}
+
+model IdentitySyncRun {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  providerId     String    @map("provider_id") @db.Uuid
+  status         String    // PENDING | RUNNING | COMPLETED | FAILED
+  usersCreated   Int       @default(0) @map("users_created")
+  usersUpdated   Int       @default(0) @map("users_updated")
+  usersDisabled  Int       @default(0) @map("users_disabled")
+  errorMessage   String?   @map("error_message") @db.Text
+  startedAt      DateTime  @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  provider     IdentityProvider @relation(fields: [providerId], references: [id])
+
+  @@index([organizationId, startedAt])
+  @@map("identity_sync_runs")
 }
 
 model Role {
@@ -128,6 +251,7 @@ model Role {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   userRoles    UserRole[]
+  identityGroupRoleMaps IdentityGroupRoleMap[]
 
   @@unique([organizationId, name])
   @@index([organizationId])

@@ -91,6 +91,11 @@ export const PERMISSIONS = {
   ASSESSMENT_UPDATE: "assessment:update",
   ASSESSMENT_EVALUATE: "assessment:evaluate",
   ASSESSMENT_CLI_TOKEN: "assessment:cli_token",
+
+  // identity / directory federation
+  IDENTITY_READ: "identity:read",
+  IDENTITY_UPDATE: "identity:update",
+  IDENTITY_SYNC: "identity:sync",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -150,6 +155,9 @@ export const SYSTEM_ROLE_PRESETS: Record<string, Permission[]> = {
     PERMISSIONS.ASSESSMENT_UPDATE,
     PERMISSIONS.ASSESSMENT_EVALUATE,
     PERMISSIONS.ASSESSMENT_CLI_TOKEN,
+    PERMISSIONS.IDENTITY_READ,
+    PERMISSIONS.IDENTITY_UPDATE,
+    PERMISSIONS.IDENTITY_SYNC,
   ],
   COMPLIANCE_OFFICER: [
     PERMISSIONS.ORGANIZATION_READ,
@@ -212,6 +220,7 @@ export const SYSTEM_ROLE_PRESETS: Record<string, Permission[]> = {
     PERMISSIONS.AUDIT_READ,
     PERMISSIONS.AUDIT_EXPORT,
     PERMISSIONS.ASSESSMENT_READ,
+    PERMISSIONS.IDENTITY_READ,
   ],
   MEMBER: [
     PERMISSIONS.ORGANIZATION_READ,
