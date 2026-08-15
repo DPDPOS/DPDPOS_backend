@@ -9,7 +9,7 @@ Digital Personal Data Protection Operating System — API and background workers
 - Node.js 20+
 - Docker Desktop (Postgres, Redis, MinIO) — this machine uses the standalone `docker-compose` CLI
 
-## Quick start
+## Quick start (local)
 
 ```bash
 # 1. Install dependencies
@@ -23,7 +23,7 @@ cp .env.example .env
 
 # 4. Generate Prisma client and apply migrations
 npx prisma generate
-npx prisma migrate dev
+npx prisma migrate deploy
 
 # 5. Seed demo organization, roles, and admin user
 npm run prisma:seed
@@ -39,6 +39,29 @@ Health checks:
 - `GET /readyz` — Postgres + Redis readiness
 
 API base path: `/api/v1`
+
+Set public URLs in `.env` (required for Entra SSO and CLI mint instructions):
+
+```env
+API_PUBLIC_URL=http://localhost:3000
+FRONTEND_PUBLIC_URL=http://localhost:3001
+```
+
+## Production / free-tier deployment
+
+Deploy the **API + worker + Neon Postgres + Upstash Redis + Cloudflare R2 + Vercel frontend + npm CLI** using only free tiers.
+
+**Full step-by-step guide:** [`docs/14_deployment.md`](./docs/14_deployment.md)
+
+That document covers account setup, every environment variable, Render/Vercel wiring, Entra redirect URIs, seeding, smoke tests, and common failures.
+
+Related repos:
+
+| Repo | Role in deploy |
+|---|---|
+| `dpdpos_backend` (this repo) | Render Web Service + Background Worker |
+| `dpdpos` | Vercel frontend (`BACKEND_URL` → this API) |
+| `dpdp-cli` | Publish to npm as `dpdp-cli` (`dpdp` binary) |
 
 ## Proof-of-concept demo
 
@@ -66,9 +89,11 @@ Demo admin (from seed): `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000
 | `npm run dev` | API with hot reload |
 | `npm run dev:worker` | Worker with hot reload |
 | `npm run build` | Compile TypeScript |
+| `npm run start` / `npm run start:worker` | Production API / worker |
 | `npm run test` | Run Vitest |
 | `npm run docker:up` | Start Postgres, Redis, MinIO |
-| `npm run prisma:migrate` | Create/apply migrations |
+| `npm run prisma:migrate` | Create/apply migrations (dev) |
+| `npm run prisma:deploy` | Apply migrations (CI / production) |
 | `npm run prisma:seed` | Seed demo data |
 
 ## Developer ownership
@@ -82,6 +107,8 @@ See `dpdpos-progress-tracker.xlsx` and `docs/09_developer_a_implementation_plan.
 ## Architecture
 
 Full conventions live in `docs/architecture.md`.
+
+Identity / Entra / AD: `docs/13_identity_ad_entra_integration_plan.md`.
 
 ## Auth guards (for all developers)
 
@@ -127,5 +154,5 @@ Privileged roles (`ORG_ADMIN`, `DPO`, `AUDITOR`) should enroll MFA. Use `require
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/api/v1/requirements` | `requirement:read` |
-| POST | `/api/v1/requirements` | `requirement:create`  |
-| POST | `/api/v1/requirements/:id/map` | `requirement:create` | 
+| POST | `/api/v1/requirements` | `requirement:create` |
+| POST | `/api/v1/requirements/:id/map` | `requirement:create` |
