@@ -10,6 +10,7 @@ import {
 } from "../../../shared/errors/app-error.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 import { hashToken } from "../../auth/utils/token-crypto.js";
+import { appConfig } from "../../../config/app.config.js";
 import { getS3Client } from "../../../infrastructure/storage/s3-adapter.js";
 import { s3Config } from "../../../config/s3.config.js";
 import { appendAssessmentAudit } from "./assessment-audit.service.js";
@@ -437,9 +438,10 @@ export class AssessmentService {
       label: row.label,
       expiresAt: row.expiresAt,
       instructions: {
-        login: `dpdp login --token ${raw} --api http://127.0.0.1:3000`,
+        install: "npm install -g dpdp-cli",
+        login: `dpdp login --token ${raw} --api ${appConfig.apiPublicUrl}`,
         configure: `dpdp configure --assessment ${assessmentId}`,
-        scan: "dpdp scan ./path-to-repo",
+        scan: "dpdp scan ./path-to-your-code",
         submit: "dpdp submit",
       },
     };
