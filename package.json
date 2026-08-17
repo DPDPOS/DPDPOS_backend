@@ -4,7 +4,7 @@
   "private": true,
   "description": "DPDPOS — Digital Personal Data Protection Operating System backend API and workers",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
