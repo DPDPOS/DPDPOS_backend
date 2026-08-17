@@ -12,7 +12,7 @@
 |---|---|---|---|
 | Web console | `dpdpos` | **Vercel** Hobby | Next.js UI |
 | REST API | `dpdpos_backend` | **Render** Free Web Service | Express `/api/v1` |
-| Background worker | `dpdpos_backend` | **Render** Free Background Worker | BullMQ jobs, outbox, event bus |
+| Background worker | `dpdpos_backend` | **same Render web service** (`npm run start:api-and-worker`) | BullMQ jobs, outbox, event bus |
 | PostgreSQL | — | **Neon** Free | Primary database (Prisma) |
 | Redis | — | **Upstash** Free | Sessions/state, queues, OIDC exchange codes |
 | Object storage | — | **Cloudflare R2** Free | Assessment documents / evidence (S3 API) |
@@ -23,10 +23,9 @@
 Browser ──► Vercel (frontend)
                │  /api/* rewrite
                ▼
-            Render API ──► Neon Postgres
-               │       └──► Upstash Redis
-               │       └──► Cloudflare R2
-            Render Worker (same env as API)
+            Render API + worker ──► Neon Postgres
+               │                 └──► Upstash Redis
+               │                 └──► object storage
 CLI (npm) ──► Render API  (Bearer dpdp_… token)
 ```
 
@@ -247,26 +246,23 @@ Change the password after first login in any shared environment.
 
 ---
 
-## 6. Deploy the background worker on Render
+## 6. Background worker (assessments)
 
-The API process starts the **outbox relay**, but **BullMQ job processors** and the **event bus worker** live in `npm run start:worker`. Assessments, notifications, AI jobs, etc. need the worker.
+The API process starts the **outbox relay**, but **BullMQ job processors** (assessments, notifications, AI jobs) live in `npm run start:worker`.
 
-1. Render → **New** → **Background Worker**.
-2. Same repo `dpdpos_backend`.
-3. Settings:
+Render **Background Worker** has **no Free instance** (Starter is paid). For a free demo, run the worker **inside the existing web service**.
 
-| Field | Value |
-|---|---|
-| Name | `dpdpos-worker` |
-| Build Command | `npm install && npx prisma generate && npm run build` |
-| Start Command | `npm run start:worker` |
-| Instance type | **Free** |
+On `dpdpos-api`, change **Start Command** to:
 
-4. Copy **all** environment variables from `dpdpos-api` (same `DATABASE_URL`, `REDIS_URL`, S3, JWT, public URLs).
+```text
+npx prisma migrate deploy && npm run start:api-and-worker
+```
 
-5. Deploy. Logs should show `worker.ready`.
+Redeploy. Logs should show both `api.listening` and `worker.ready`.
 
-**If you skip the worker:** login and many reads still work; async jobs (scans processing pipelines, some notifications) will stall.
+Jobs only run while the Free web service is awake (it sleeps after ~15 minutes idle). That is enough for a demo.
+
+Paid option: a separate Background Worker with start command `npm run start:worker` and the same env vars as the API.
 
 ---
 

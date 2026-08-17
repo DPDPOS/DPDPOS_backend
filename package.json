@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "start:worker": "node dist/worker.js",
+    "start:api-and-worker": "node scripts/start-api-and-worker.mjs",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
