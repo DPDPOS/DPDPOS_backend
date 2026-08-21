@@ -324,10 +324,22 @@ export class AuthService {
     input: { organizationId: string; userId: string },
     meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
     options: { mfaVerified: boolean } = { mfaVerified: false },
-  ): Promise<LoginSuccessResult> {
+  ): Promise<LoginResult> {
     const user = await this.repo.findUserById(input);
     if (!user || user.status === "DISABLED") {
       throw new UnauthorizedError("Account is disabled");
+    }
+
+    const privileged = isPrivilegedRoleSet(user.roleNames);
+    if (privileged && user.mfaEnabled && !options.mfaVerified) {
+      return {
+        mfaRequired: true,
+        mfaToken: signMfaChallengeToken({
+          userId: user.id,
+          organizationId: user.organizationId,
+        }),
+        expiresIn: 300,
+      };
     }
 
     const activateIfInvited = user.status === "INVITED";
@@ -338,7 +350,6 @@ export class AuthService {
       mfaVerified: options.mfaVerified,
     });
 
-    const privileged = isPrivilegedRoleSet(user.roleNames);
     const skipLocalTotp = await this.shouldSkipLocalTotp(user.organizationId);
 
     return {
@@ -368,7 +379,7 @@ export class AuthService {
       return {
         enforceSso: false,
         allowLocalBreakGlass: true,
-        disableLocalTotpWhenFederated: true,
+        disableLocalTotpWhenFederated: false,
       };
     }
   }

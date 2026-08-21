@@ -28,6 +28,13 @@ export const upsertIdentityProviderDtoSchema = z.object({
   clientSecret: z.string().min(1).max(500).optional().nullable(),
   tenantId: z.string().min(1).max(100).optional().nullable(),
   scopes: z.string().max(500).optional().nullable(),
+  mfaAuthenticationContext: z
+    .string()
+    .trim()
+    .regex(/^c(?:[1-9]|[1-9][0-9])$/i, "Must be an Entra Authentication Context ID (C1-C99)")
+    .transform((value) => value.toLowerCase())
+    .optional()
+    .nullable(),
   entityId: z.string().max(500).optional().nullable(),
   acsUrl: z.string().url().optional().nullable(),
   idpMetadataUrl: z.string().url().optional().nullable(),
