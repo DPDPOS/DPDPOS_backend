@@ -346,7 +346,11 @@ describe("Validation engine (VLD-003)", () => {
       where: { organizationId: orgId, triggerType: "SCHEDULED" },
     });
     expect(scheduled).toHaveLength(1);
-    expect(scheduled[0].status).toBe("PENDING");
+    // Sweep only creates + enqueues; a shared Redis worker (local or remote)
+    // may claim the job before this read, so status is not stuck at PENDING.
+    expect(["PENDING", "RUNNING", "COMPLETED", "PARTIAL"]).toContain(
+      scheduled[0].status,
+    );
     scheduled.forEach((s) => createdRunIds.push(s.id));
   });
 

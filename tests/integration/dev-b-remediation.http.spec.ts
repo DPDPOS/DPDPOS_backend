@@ -13,6 +13,7 @@ import type { BaseDomainEvent } from "../../src/events/types/base-event.interfac
 import { onViolationCreated } from "../../src/modules/remediation/events/handlers/violation-created.handler.js";
 
 import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+import { loginWithEmailOtp } from "../../src/test-utils/login-as.js";
 
 /**
  * Cross-module happy path for Developer B — Feature REM-005:
@@ -82,11 +83,8 @@ describe("Dev B remediation end-to-end", () => {
       },
     });
 
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email, password })
-      .expect(200);
-    accessToken = login.body.data.tokens.accessToken as string;
+    const login = await loginWithEmailOtp(app, { organizationId, email, password });
+    accessToken = login.tokens.accessToken;
 
     // 3) Assignee user
     const assignee = await prisma.user.create({
@@ -241,11 +239,12 @@ describe("Dev B remediation end-to-end", () => {
       },
     });
 
-    const memberLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email: memberUser.email, password })
-      .expect(200);
-    const memberToken = memberLogin.body.data.tokens.accessToken as string;
+    const memberLogin = await loginWithEmailOtp(app, {
+      organizationId,
+      email: memberUser.email,
+      password,
+    });
+    const memberToken = memberLogin.tokens.accessToken;
 
     await request(app)
       .get("/api/v1/remediation-tasks")

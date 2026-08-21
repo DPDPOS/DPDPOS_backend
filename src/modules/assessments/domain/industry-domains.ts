@@ -10,6 +10,10 @@ export const INDUSTRY_DOMAIN_KEYS = [
   "education_edtech",
   "it_saas",
   "telecom",
+  "automobile",
+  "food_manufacturing",
+  "hotels",
+  "space_technology",
 ] as const;
 
 export type IndustryDomainKey = (typeof INDUSTRY_DOMAIN_KEYS)[number];
@@ -21,6 +25,10 @@ export const INDUSTRY_DOMAIN_LABELS: Record<IndustryDomainKey, string> = {
   education_edtech: "Education & EdTech",
   it_saas: "IT, SaaS & B2B Tech",
   telecom: "Telecom & Digital Communications",
+  automobile: "Automobile & Automotive",
+  food_manufacturing: "Food Manufacturing & Processing",
+  hotels: "Hotels & Hospitality",
+  space_technology: "Space Technology & Aerospace",
 };
 
 /** Settings / create-org dropdown values (stable keys stored on Organization.industry). */
@@ -84,16 +92,65 @@ const ALIASES: Array<{ key: IndustryDomainKey; patterns: RegExp[] }> = [
     ],
   },
   {
+    key: "space_technology",
+    patterns: [
+      /\bspace\s*tech/i,
+      /\bspace\s+technology\b/i,
+      /\baerospace\b/i,
+      /\bsatellite\b/i,
+      /\blaunch\s+vehicle\b/i,
+      /\bspace\s+agency\b/i,
+      /^space_technology$/i,
+    ],
+  },
+  {
+    key: "automobile",
+    patterns: [
+      /\bautomobile\b/i,
+      /\bautomotive\b/i,
+      /\bauto[\s-]?oem\b/i,
+      /\bvehicle\s+manufactur/i,
+      /\bev\s+maker\b/i,
+      /\bconnected\s+car\b/i,
+      /\bdealership\b/i,
+      /^automobile$/i,
+    ],
+  },
+  {
+    key: "food_manufacturing",
+    patterns: [
+      /\bfood\s+manufactur/i,
+      /\bfood\s+processing\b/i,
+      /\bfood\s+&\s*beverage\b/i,
+      /\bfmcg\s+food\b/i,
+      /\bcold[\s-]?chain\b/i,
+      /\bpackaged\s+food\b/i,
+      /^food_manufacturing$/i,
+    ],
+  },
+  {
+    key: "hotels",
+    patterns: [
+      /\bhotel/i,
+      /\bhospitality\b/i,
+      /\bresort\b/i,
+      /\bproperty\s+management\s+system\b/i,
+      /\bguest\s+management\b/i,
+      /^hotels$/i,
+    ],
+  },
+  {
     key: "it_saas",
     patterns: [
       /\bsaas\b/i,
       /\bsoftware\b/i,
       /\bit\/?ites\b/i,
       /\b\bit\b/i,
-      /\btechnology\b/i,
       /\bb2b\s+tech\b/i,
       /\bcloud\b/i,
       /^it_saas$/i,
+      // Avoid bare "technology" matching space technology — handled above.
+      /^(?!.*\bspace\b).*?\btechnology\b/i,
     ],
   },
   {
