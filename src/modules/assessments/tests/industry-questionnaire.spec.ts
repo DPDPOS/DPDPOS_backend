@@ -17,6 +17,11 @@ describe("industry questionnaire catalog", () => {
     expect(normalizeIndustry("EdTech")).toBe("education_edtech");
     expect(normalizeIndustry("SaaS")).toBe("it_saas");
     expect(normalizeIndustry("telecom")).toBe("telecom");
+    expect(normalizeIndustry("Automobile")).toBe("automobile");
+    expect(normalizeIndustry("Food Manufacturing")).toBe("food_manufacturing");
+    expect(normalizeIndustry("Hotels")).toBe("hotels");
+    expect(normalizeIndustry("Space Technology")).toBe("space_technology");
+    expect(normalizeIndustry("aerospace")).toBe("space_technology");
     expect(normalizeIndustry("banking_finance")).toBe("banking_finance");
     expect(normalizeIndustry("unknown widget")).toBeNull();
     expect(normalizeIndustry(null)).toBeNull();

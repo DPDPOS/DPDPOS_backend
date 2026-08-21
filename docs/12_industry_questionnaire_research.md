@@ -1,7 +1,7 @@
 # Industry-dynamic DPDP questionnaire — research & finalization
 
-Status: **IMPLEMENTED** (core + 6 industry packs; catalog keyed off `Organization.industry`)  
-Goal: Make assessment questionnaire **dynamic by organisation industry**, starting with **6 domains**. Core DPDP duties stay shared; each domain adds questions that extract the sector-specific facts needed for readiness scoring and evidence gates.
+Status: **IMPLEMENTED** (core + 10 industry packs; catalog keyed off `Organization.industry`)  
+Goal: Make assessment questionnaire **dynamic by organisation industry**. Core DPDP duties stay shared; each domain adds questions that extract the sector-specific facts needed for readiness scoring and evidence gates.
 
 ---
 
@@ -22,7 +22,7 @@ DPDP is **horizontal**; compliance design is **sector-shaped**. Questionnaire sh
 
 ---
 
-## 2. Proposed 6 industries (v1)
+## 2. Industry domains (v1 + v1.1)
 
 Chosen for: Indian digital-economy density, distinct DPDP pressure points, and overlap with existing product language (framework wizard / seed).
 
@@ -34,8 +34,12 @@ Chosen for: Indian digital-economy density, distinct DPDP pressure points, and o
 | `education_edtech` | Education & EdTech | Children’s data (verifiable parental consent); no tracking/targeted ads for minors | Section 9 children rules |
 | `it_saas` | IT, SaaS & B2B Tech | Fiduciary vs processor role; sub-processors; cross-border residency; customer DPAs | Contractual / enterprise |
 | `telecom` | Telecom & Digital Communications | Volume/SDF likelihood; location & traffic data; third-party / OTT partners; TRAI consent | TRAI / licensing |
+| `automobile` | Automobile & Automotive | Connected-car telemetry; dealer CRM sharing; biometric cabin systems; multi-party rights | OEM / dealership networks |
+| `food_manufacturing` | Food Manufacturing & Processing | Workforce biometrics; recall traceability; lab/auditor processors; plant CCTV | FSSAI / plant ops |
+| `hotels` | Hotels & Hospitality | PMS guest profiles; ID retention; OTA/channel processors; loyalty marketing | Hospitality / OTA |
+| `space_technology` | Space Technology & Aerospace | Cross-border ground/cloud; EO linkability; partner/agency DPAs; dual breach paths | Aerospace / export control |
 
-**Out of v1 (backlog):** HR/recruitment tech, insurance-only, gaming/social (large-platform schedule), manufacturing IoT.
+**Backlog:** HR/recruitment tech, insurance-only, gaming/social (large-platform schedule).
 
 **Fallback:** Unknown / empty industry → **core pack only** + prompt to set industry in Settings.
 
