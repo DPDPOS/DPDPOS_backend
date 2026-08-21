@@ -49,6 +49,8 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== "false"),
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().positive().max(100).default(10),
+  EMAIL_RATE_LIMIT_MAX: z.coerce.number().int().positive().max(10_000).default(10),
+  EMAIL_RATE_LIMIT_DURATION_MS: z.coerce.number().int().positive().max(3_600_000).default(1_000),
   // Use localhost (not 127.0.0.1): Entra only allows http://localhost redirect URIs.
   API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_PUBLIC_URL: z.string().url().default("http://localhost:3001"),

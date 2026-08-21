@@ -22,6 +22,8 @@ export const appConfig = {
     from: env.SMTP_FROM,
     requireAuth: env.SMTP_REQUIRE_AUTH,
     workerConcurrency: env.EMAIL_WORKER_CONCURRENCY,
+    rateLimitMax: env.EMAIL_RATE_LIMIT_MAX,
+    rateLimitDurationMs: env.EMAIL_RATE_LIMIT_DURATION_MS,
   },
   apiPublicUrl: env.API_PUBLIC_URL.replace(/\/$/, ""),
   frontendPublicUrl: env.FRONTEND_PUBLIC_URL.replace(/\/$/, ""),

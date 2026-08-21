@@ -11,14 +11,17 @@ export type EmailOtpJob = {
   expiresAt: number;
 };
 
+export const EMAIL_OTP_JOB_OPTIONS = {
+  attempts: 4,
+  backoff: { type: "exponential" as const, delay: 1_000 },
+  // Job data includes an OTP. Retention is bounded by both age and count.
+  removeOnComplete: { age: 600, count: 100 },
+  removeOnFail: { age: 3_600, count: 500 },
+};
+
 export const emailOtpQueue = new Queue<EmailOtpJob>(QUEUE_NAMES.EMAIL_CRITICAL, {
   connection: createBullMqConnectionOptions(),
-  defaultJobOptions: {
-    attempts: 4,
-    backoff: { type: "exponential", delay: 1_000 },
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  },
+  defaultJobOptions: EMAIL_OTP_JOB_OPTIONS,
 });
 
 /**
