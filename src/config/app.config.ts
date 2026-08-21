@@ -19,6 +19,7 @@ export const appConfig = {
     user: env.SMTP_USER,
     password: env.SMTP_PASSWORD,
     from: env.SMTP_FROM,
+    requireAuth: env.SMTP_REQUIRE_AUTH,
   },
   apiPublicUrl: env.API_PUBLIC_URL.replace(/\/$/, ""),
   frontendPublicUrl: env.FRONTEND_PUBLIC_URL.replace(/\/$/, ""),

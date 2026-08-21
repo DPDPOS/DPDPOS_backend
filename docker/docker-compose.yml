@@ -31,6 +31,14 @@ services:
       timeout: 3s
       retries: 10
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: dpdpos-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # MailHog inbox UI
+
   minio:
     image: minio/minio:latest
     container_name: dpdpos-minio

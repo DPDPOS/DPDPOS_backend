@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   RETENTION: "retention-queue",
   EXPORT: "export-queue",
   EVENT_RELAY: "event-relay-queue",
+  EMAIL_OTP: "email-otp-queue",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

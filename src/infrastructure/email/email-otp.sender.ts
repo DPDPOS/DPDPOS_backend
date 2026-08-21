@@ -11,8 +11,8 @@ function isTestEnvironment(): boolean {
 
 function getTransporter(): nodemailer.Transporter {
   if (transporter) return transporter;
-  const { host, port, secure, user, password, from } = appConfig.email;
-  if (!host || !user || !password || !from) {
+  const { host, port, secure, user, password, from, requireAuth } = appConfig.email;
+  if (!host || !from || (requireAuth && (!user || !password))) {
     throw new ServiceUnavailableError(
       "Email OTP is unavailable because SMTP is not configured",
     );
@@ -21,7 +21,7 @@ function getTransporter(): nodemailer.Transporter {
     host,
     port,
     secure,
-    auth: { user, pass: password },
+    ...(requireAuth ? { auth: { user: user!, pass: password! } } : {}),
   });
   return transporter;
 }

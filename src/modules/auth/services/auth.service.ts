@@ -8,6 +8,7 @@ import {
 import { appConfig } from "../../../config/app.config.js";
 import { getRedis } from "../../../infrastructure/cache/redis-client.js";
 import { sendEmailOtp } from "../../../infrastructure/email/email-otp.sender.js";
+import { emailOtpQueue } from "../../../jobs/queues/email-otp.queue.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
@@ -391,7 +392,12 @@ export class AuthService {
     const redis = getRedis();
     await redis.set(key, hashToken(code), "EX", 300);
     try {
-      await sendEmailOtp({ email: user.email, code, expiresInSeconds: 300 });
+      await this.queueEmailOtp({
+        email: user.email,
+        code,
+        expiresAt: Date.now() + 300_000,
+        jobId: `email-otp-${hashToken(mfaToken)}`,
+      });
     } catch (error) {
       await redis.del(key);
       throw error;
@@ -402,6 +408,35 @@ export class AuthService {
   private codesMatch(expectedHash: string, code: string): boolean {
     const actualHash = hashToken(code);
     return timingSafeEqual(Buffer.from(expectedHash), Buffer.from(actualHash));
+  }
+
+  private async queueEmailOtp(input: {
+    email: string;
+    code: string;
+    expiresAt: number;
+    jobId: string;
+  }): Promise<void> {
+    // HTTP tests use the in-memory test mailbox. In normal operation the API
+    // only queues delivery; the worker owns SMTP calls and retries.
+    if (process.env.VITEST !== undefined) {
+      await sendEmailOtp({
+        email: input.email,
+        code: input.code,
+        expiresInSeconds: Math.max(1, Math.floor((input.expiresAt - Date.now()) / 1000)),
+      });
+      return;
+    }
+    await emailOtpQueue.add(
+      "send-email-otp",
+      { email: input.email, code: input.code, expiresAt: input.expiresAt },
+      {
+        jobId: input.jobId,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1_000 },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    );
   }
 
   private async requireActiveUser(ctx: RequestContext): Promise<AuthUserRecord> {

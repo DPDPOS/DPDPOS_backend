@@ -7,6 +7,7 @@ import { registerDailyValidationScheduler } from "./schedulers/daily-validation.
 import { startNotificationWorker } from "../modules/notifications/jobs/notification.worker.js";
 import { startReportWorker } from "../modules/reports/jobs/report.worker.js";
 import { startAiWorker } from "../modules/ai/jobs/ai.worker.js";
+import { startEmailOtpWorker } from "../modules/auth/jobs/email-otp.worker.js";
 
 /**
  * Job processor registry — module-specific processors register here at worker
@@ -22,6 +23,7 @@ export async function registerJobProcessors(): Promise<void> {
   startNotificationWorker();
   startReportWorker();
   startAiWorker();
+  startEmailOtpWorker();
 
   logger.info("jobs.registry.ready");
 }
