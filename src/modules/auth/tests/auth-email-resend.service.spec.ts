@@ -45,6 +45,7 @@ describe("email MFA resend reliability", () => {
 
     const restored = JSON.parse((await getRedis().get(key))!) as typeof original;
     expect(restored).toEqual(original);
+    expect(await getRedis().get(`auth:mfa:resend:user:${userId}`)).toBeNull();
     expect(await (service as unknown as { verifyEmailOtpChallenge: (claims: { challengeId: string; sub: string; organizationId: string }, code: string) => Promise<string> }).verifyEmailOtpChallenge({ challengeId, sub: userId, organizationId }, oldCode)).toBe("VERIFIED");
   });
 

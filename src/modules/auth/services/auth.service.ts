@@ -139,7 +139,9 @@ export class AuthService {
       throw new UnauthorizedError("Invalid email or password");
     }
 
-    return this.createEmailOtpChallenge(user);
+    const challenge = await this.createEmailOtpChallenge(user);
+    logger.info({ userId: user.id, challengeId: this.challengeIdFromToken(challenge.mfaToken) }, "mfa.challenge_queued");
+    return challenge;
   }
 
   async verifyMfa(
@@ -161,6 +163,7 @@ export class AuthService {
       }
       const outcome = await this.verifyEmailOtpChallenge(claims, input.code);
       if (outcome !== "VERIFIED") {
+        logger.warn({ challengeId: claims.challengeId, userId: claims.sub }, "mfa.verify_failed");
         throw new UnauthorizedError("Invalid or expired MFA code");
       }
     } else {
@@ -169,6 +172,7 @@ export class AuthService {
       }
       const secret = decryptSecret(user.mfaSecretEnc);
       if (!verifyTotpCode(secret, input.code)) {
+        logger.warn({ userId: claims.sub, factor: "TOTP" }, "mfa.verify_failed");
         throw new UnauthorizedError("Invalid MFA code");
       }
     }
@@ -179,6 +183,7 @@ export class AuthService {
       correlationId: meta.correlationId,
       mfaVerified: true,
     });
+    logger.info({ userId: user.id, factor: claims.factor }, "mfa.verify_success");
 
     return {
       mfaRequired: false,
@@ -202,15 +207,20 @@ export class AuthService {
     const user = await this.repo.findUserById({ organizationId: claims.organizationId, userId: claims.sub });
     if (!user || user.status === "DISABLED") throw new UnauthorizedError("Invalid MFA challenge");
     const now = Date.now();
+    logger.info({ challengeId: claims.challengeId, userId: claims.sub }, "mfa.resend_requested");
     const eligibility = await this.checkEmailOtpResendEligibility(claims, now);
     if (eligibility === "MISSING") throw new UnauthorizedError("Invalid or expired MFA challenge");
     if (eligibility === "COOLDOWN") {
+      logger.warn({ challengeId: claims.challengeId, userId: claims.sub, reason: "cooldown" }, "mfa.resend_rate_limited");
       throw new RateLimitedError(`Wait ${MFA_RESEND_COOLDOWN_SECONDS} seconds before requesting another code`);
     }
-    if (eligibility === "LIMIT") throw new RateLimitedError("Too many MFA resend requests");
+    if (eligibility === "LIMIT") {
+      logger.warn({ challengeId: claims.challengeId, userId: claims.sub, reason: "challenge_limit" }, "mfa.resend_rate_limited");
+      throw new RateLimitedError("Too many MFA resend requests");
+    }
 
     const code = this.newOtp();
-    await this.enforceResendAbuseLimits(claims.sub, meta.ipAddress);
+    const abuseKeys = await this.enforceResendAbuseLimits(claims.sub, meta.ipAddress);
     const updated = await this.rotateEmailOtpForResend(claims, hashToken(code), now);
     if (updated === "MISSING") throw new UnauthorizedError("Invalid or expired MFA challenge");
     if (updated === "COOLDOWN") {
@@ -230,9 +240,11 @@ export class AuthService {
       });
     } catch (error) {
       const restored = await this.restoreEmailOtpAfterQueueFailure(claims, updated);
+      await this.releaseResendAbuseLimits(abuseKeys);
       logger.error({ challengeId: claims.challengeId, userId: claims.sub, restored }, "mfa.resend_queue_failed");
       throw error;
     }
+    logger.info({ challengeId: claims.challengeId, userId: claims.sub, resendCount: updated.resendCount }, "mfa.resend_queued");
     return {
       mfaRequired: true,
       expiresIn: Math.max(1, Math.ceil(updated.remainingTtlMs / 1_000)),
@@ -460,6 +472,7 @@ export class AuthService {
       factor: "EMAIL_OTP",
       challengeId,
     });
+
     const code = this.newOtp();
     const key = this.emailChallengeKey(challengeId);
     const redis = getRedis();
@@ -619,16 +632,41 @@ export class AuthService {
     return Number(result) === 1;
   }
 
-  private async enforceResendAbuseLimits(userId: string, ipAddress?: string): Promise<void> {
+  private async enforceResendAbuseLimits(userId: string, ipAddress?: string): Promise<string[]> {
     const redis = getRedis();
-    const userCount = await redis.incr(`auth:mfa:resend:user:${userId}`);
-    if (userCount === 1) await redis.expire(`auth:mfa:resend:user:${userId}`, 900);
-    if (userCount > MFA_MAX_RESENDS_PER_15_MINUTES) throw new RateLimitedError("Too many MFA resend requests for this account");
-    if (!ipAddress) return;
+    const userKey = `auth:mfa:resend:user:${userId}`;
+    const userCount = await redis.incr(userKey);
+    if (userCount === 1) await redis.expire(userKey, 900);
+    if (userCount > MFA_MAX_RESENDS_PER_15_MINUTES) {
+      logger.warn({ userId, reason: "account_limit" }, "mfa.resend_rate_limited");
+      throw new RateLimitedError("Too many MFA resend requests for this account");
+    }
+    if (!ipAddress) return [userKey];
     const key = `auth:mfa:resend:ip:${hashToken(ipAddress)}`;
     const ipCount = await redis.incr(key);
     if (ipCount === 1) await redis.expire(key, 3_600);
-    if (ipCount > MFA_MAX_IP_RESENDS_PER_HOUR) throw new RateLimitedError("Too many MFA resend requests from this network");
+    if (ipCount > MFA_MAX_IP_RESENDS_PER_HOUR) {
+      logger.warn({ userId, reason: "ip_limit" }, "mfa.resend_rate_limited");
+      throw new RateLimitedError("Too many MFA resend requests from this network");
+    }
+    return [userKey, key];
+  }
+
+  private async releaseResendAbuseLimits(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    await getRedis().eval(
+      `for _, key in ipairs(KEYS) do
+         local count = redis.call('DECR', key)
+         if count <= 0 then redis.call('DEL', key) end
+       end
+       return 1`,
+      keys.length,
+      ...keys,
+    );
+  }
+
+  private challengeIdFromToken(token: string): string | undefined {
+    return verifyMfaChallengeToken(token).challengeId;
   }
 
   private async requireActiveUser(ctx: RequestContext): Promise<AuthUserRecord> {
