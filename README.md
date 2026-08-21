@@ -129,6 +129,8 @@ See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` field
 | POST | `/api/v1/auth/logout` | body: `refreshToken`; optional Bearer access token for deny-list |
 | GET | `/api/v1/auth/me` | Bearer required |
 
+Password login always returns an email-OTP MFA challenge. Configure the SMTP variables in `.env`; users must submit the six-digit code through `/api/v1/auth/mfa/verify` before receiving session tokens.
+
 Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
 
 Privileged roles (`ORG_ADMIN`, `DPO`, `AUDITOR`) should enroll MFA. Use `requireMfa` middleware on sensitive routes (exported from auth module). Role permission changes invalidate Redis permission cache keys so guards pick up new permissions immediately.

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import argon2 from "argon2";
-import { authenticator } from "otplib";
 import { randomUUID } from "node:crypto";
 import { createApp } from "../../../app.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
@@ -18,7 +17,7 @@ import { relayOutboxOnceForTests } from "../../../events/outbox/outbox-relay.wor
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { signAccessToken } from "../utils/jwt.js";
-import { encryptSecret } from "../utils/secret-crypto.js";
+import { getLastEmailOtpForTest } from "../../../infrastructure/email/email-otp.sender.js";
 import { OrganizationService } from "../../organizations/services/organization.service.js";
 
 import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
@@ -107,7 +106,7 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
       })
       .expect(200);
 
-    const login = await request(app)
+    const challenge = await request(app)
       .post("/api/v1/auth/login")
       .send({
         organizationId,
@@ -116,15 +115,22 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
       })
       .expect(200);
 
+    const code = getLastEmailOtpForTest(email);
+    expect(code).toBeTruthy();
+
+    const login = await request(app)
+      .post("/api/v1/auth/mfa/verify")
+      .send({ mfaToken: challenge.body.data.mfaToken, code })
+      .expect(200);
+
     expect(login.body.data.mfaRequired).toBe(false);
     expect(login.body.data.tokens.accessToken).toBeTruthy();
     expect(login.body.data.user.status).toBe("ACTIVE");
   });
 
-  it("challenges privileged MFA login and verifies TOTP", async () => {
+  it("challenges every password login and verifies its email OTP", async () => {
     const email = `mfa.admin.${Date.now()}@example.com`;
     const password = "ChangeMe123!";
-    const secret = authenticator.generateSecret();
 
     const adminRole = await prisma.role.findFirst({
       where: { organizationId, name: "ORG_ADMIN", deletedAt: null },
@@ -138,8 +144,6 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
         name: "MFA Admin",
         passwordHash: await argon2.hash(password),
         status: "ACTIVE",
-        mfaEnabled: true,
-        mfaSecretEnc: encryptSecret(secret),
       },
     });
     await prisma.userRole.create({
@@ -158,7 +162,8 @@ describe("Auth follow-ups (invite, MFA, cache, outbox)", () => {
     expect(challenged.body.data.mfaRequired).toBe(true);
     expect(challenged.body.data.mfaToken).toBeTruthy();
 
-    const code = authenticator.generate(secret);
+    const code = getLastEmailOtpForTest(email);
+    expect(code).toBeTruthy();
     const verified = await request(app)
       .post("/api/v1/auth/mfa/verify")
       .send({

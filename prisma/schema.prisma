@@ -150,7 +150,7 @@ model OrganizationIdentitySettings {
   mode                           IdentityMode @default(LOCAL)
   enforceSso                     Boolean      @default(false) @map("enforce_sso")
   allowLocalBreakGlass           Boolean      @default(true) @map("allow_local_break_glass")
-  disableLocalTotpWhenFederated  Boolean      @default(true) @map("disable_local_totp_when_federated")
+  disableLocalTotpWhenFederated  Boolean      @default(false) @map("disable_local_totp_when_federated")
   jitProvisioningEnabled         Boolean      @default(false) @map("jit_provisioning_enabled")
   defaultRoleName                String?      @map("default_role_name")
   createdAt                      DateTime     @default(now()) @map("created_at")
@@ -173,6 +173,9 @@ model IdentityProvider {
   clientSecretEnc  String?              @map("client_secret_enc")
   tenantId         String?              @map("tenant_id")
   scopes           String?              // space-separated
+  /// Entra Conditional Access Authentication Context (C1-C99) that requires MFA.
+  /// When configured, DPDPOS requests and verifies this value in the ID token.
+  mfaAuthenticationContext String?      @map("mfa_authentication_context")
   // SAML
   entityId         String?              @map("entity_id")
   acsUrl           String?              @map("acs_url")

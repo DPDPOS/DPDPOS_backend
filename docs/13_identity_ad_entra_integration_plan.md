@@ -1,7 +1,7 @@
 # Identity integration plan — Windows AD, Microsoft Entra ID, Entra + Microsoft 365
 
 **Product:** DPDPOS (backend + CLI + frontend)  
-**Status:** MVP implemented (LOCAL default; OIDC Entra + LDAP AD live; SAML config stub; Graph sync deferred)  
+**Status:** MVP implemented (LOCAL default; OIDC Entra + LDAP AD live; Entra Conditional Access MFA context support; SAML config stub; Graph sync deferred)
 **Date:** 2026-08-14  
 **Depends on current auth:** org-scoped email/password, JWT access + refresh, in-app TOTP MFA for privileged roles, assessment CLI tokens (`dpdp_…`)
 
@@ -439,11 +439,20 @@ Use only for air-gapped AD labs; prefer device code when Entra exists.
 | Org mode | Privileged user MFA | `mfaVerified` on DPDPOS JWT | In-app TOTP |
 |---|---|---|---|
 | LOCAL | In-app TOTP (current) | Set after `/mfa/verify` | Required for ORG_ADMIN/DPO/AUDITOR |
-| OIDC_ENTRA / Entra+365 | Entra Conditional Access | `true` if `amr` contains MFA / ACR meets policy | Optional / disabled by setting |
+| OIDC_ENTRA / Entra+365 | Entra Conditional Access Authentication Context | `true` only when the signed ID token contains the configured `acrs` context | Optional only after the context is configured and local TOTP is explicitly disabled |
 | LDAP_AD | AD-integrated MFA (NPS/RADIUS) if any; else keep TOTP | LDAP alone ≠ MFA | Keep TOTP unless another factor proven |
 | HYBRID | Entra path preferred | Same as Entra | Break-glass local admin keeps TOTP |
 
 Also: **apply `requireMfa`** on mint CLI token and other sensitive routes so a non-MFA session cannot mint powerful assessment credentials.
+
+### Entra MFA configuration (implemented)
+
+1. In the customer's Entra tenant, create an Authentication Context (for example `C1`) and bind a Conditional Access policy that **requires multifactor authentication** for that context.
+2. In DPDPOS, configure the OIDC provider with `mfaAuthenticationContext: "c1"`. At sign-in, DPDPOS sends the OIDC claims request `{"id_token":{"acrs":{"essential":true,"value":"c1"}}}`.
+3. DPDPOS verifies the signed ID token includes that exact `acrs` value before setting its own session's `mfaVerified` claim. A missing value rejects the sign-in.
+4. Only then set `disableLocalTotpWhenFederated: true`. The API refuses that setting unless an enabled OIDC provider has an MFA Authentication Context. The default remains `false`.
+
+The context identifier alone does not enforce MFA; the Conditional Access policy in Entra is the enforcement point. The identifier and policy must be managed by the tenant administrator. Microsoft documents Auth Context requests and the `acrs` token claim in its [Conditional Access developer guide](https://learn.microsoft.com/en-us/entra/identity-platform/developer-guide-conditional-access-authentication-context) and [optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference).
 
 ---
 

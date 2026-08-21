@@ -1,3 +1,4 @@
+import { ValidationError } from "../../../shared/errors/app-error.js";
 import type { UpdateIdentitySettingsDto } from "../dto/identity.dto.js";
 import { identitySettingsRepository } from "../repositories/identity-settings.repository.js";
 import { identityProviderRepository } from "../repositories/identity-provider.repository.js";
@@ -26,7 +27,18 @@ export class IdentitySettingsService {
     };
   }
 
-  update(organizationId: string, dto: UpdateIdentitySettingsDto) {
+  async update(organizationId: string, dto: UpdateIdentitySettingsDto) {
+    if (dto.disableLocalTotpWhenFederated === true) {
+      const provider = await identityProviderRepository.findEnabledByType(
+        organizationId,
+        "OIDC",
+      );
+      if (!provider?.mfaAuthenticationContext) {
+        throw new ValidationError(
+          "Configure an enabled Entra OIDC provider with an MFA Authentication Context before disabling local TOTP",
+        );
+      }
+    }
     return identitySettingsRepository.update(organizationId, {
       ...(dto.mode !== undefined ? { mode: dto.mode } : {}),
       ...(dto.enforceSso !== undefined ? { enforceSso: dto.enforceSso } : {}),

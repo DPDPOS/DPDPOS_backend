@@ -12,6 +12,7 @@ import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { OrganizationService } from "../../organizations/services/organization.service.js";
 import { verifyAccessToken } from "../utils/jwt.js";
+import { getLastEmailOtpForTest } from "../../../infrastructure/email/email-otp.sender.js";
 
 import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
 
@@ -81,9 +82,18 @@ describe("Auth JWT sessions HTTP API", () => {
   });
 
   it("logs in, returns me, refreshes, and logs out", async () => {
-    const login = await request(app)
+    const challenge = await request(app)
       .post("/api/v1/auth/login")
       .send({ organizationId, email, password })
+      .expect(200);
+
+    expect(challenge.body.data.mfaRequired).toBe(true);
+    const code = getLastEmailOtpForTest(email);
+    expect(code).toBeTruthy();
+
+    const login = await request(app)
+      .post("/api/v1/auth/mfa/verify")
+      .send({ mfaToken: challenge.body.data.mfaToken, code })
       .expect(200);
 
     expect(login.body.data.user.id).toBe(userId);

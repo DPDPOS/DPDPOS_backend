@@ -20,6 +20,7 @@ function sanitizeProvider(row: {
   clientSecretEnc: string | null;
   tenantId: string | null;
   scopes: string | null;
+  mfaAuthenticationContext: string | null;
   entityId: string | null;
   acsUrl: string | null;
   idpMetadataUrl: string | null;
@@ -42,6 +43,7 @@ function sanitizeProvider(row: {
     hasClientSecret: Boolean(row.clientSecretEnc),
     tenantId: row.tenantId,
     scopes: row.scopes,
+    mfaAuthenticationContext: row.mfaAuthenticationContext,
     entityId: row.entityId,
     acsUrl: row.acsUrl,
     idpMetadataUrl: row.idpMetadataUrl,

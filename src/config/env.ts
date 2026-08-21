@@ -28,6 +28,16 @@ const envSchema = z.object({
     .transform((value) => value || undefined),
   AI_MODEL: z.string().optional(),
   AI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
+  // SMTP delivery for the email OTP required after local password login.
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().max(65535).default(587),
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  SMTP_FROM: z.string().min(1).optional(),
   // Use localhost (not 127.0.0.1): Entra only allows http://localhost redirect URIs.
   API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_PUBLIC_URL: z.string().url().default("http://localhost:3001"),

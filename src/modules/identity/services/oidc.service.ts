@@ -24,10 +24,11 @@ function pkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-function amrIndicatesMfa(amr: unknown): boolean {
-  if (!Array.isArray(amr)) return false;
-  const values = amr.map((v) => String(v).toLowerCase());
-  return values.some((v) => ["mfa", "otp", "sms", "hwk", "fido"].includes(v));
+function acrsIncludesContext(acrs: unknown, requiredContext: string): boolean {
+  if (!Array.isArray(acrs)) return false;
+  return acrs.some(
+    (value) => String(value).toLowerCase() === requiredContext.toLowerCase(),
+  );
 }
 
 export class OidcService {
@@ -57,6 +58,9 @@ export class OidcService {
         ...(secretEnc ? { clientSecretEnc: secretEnc } : {}),
         tenantId: dto.tenantId ?? null,
         scopes: dto.scopes ?? "openid profile email User.Read GroupMember.Read.All",
+        ...(dto.mfaAuthenticationContext !== undefined
+          ? { mfaAuthenticationContext: dto.mfaAuthenticationContext }
+          : {}),
       });
     }
 
@@ -70,6 +74,7 @@ export class OidcService {
       clientSecretEnc: secretEnc ?? null,
       tenantId: dto.tenantId ?? null,
       scopes: dto.scopes ?? "openid profile email User.Read GroupMember.Read.All",
+      mfaAuthenticationContext: dto.mfaAuthenticationContext ?? null,
     });
   }
 
@@ -120,6 +125,21 @@ export class OidcService {
     url.searchParams.set("nonce", nonce);
     url.searchParams.set("code_challenge", codeChallenge);
     url.searchParams.set("code_challenge_method", "S256");
+    if (provider.mfaAuthenticationContext) {
+      // This is an Entra Conditional Access Authentication Context claim
+      // request. The tenant policy bound to this context performs MFA.
+      url.searchParams.set(
+        "claims",
+        JSON.stringify({
+          id_token: {
+            acrs: {
+              essential: true,
+              value: provider.mfaAuthenticationContext,
+            },
+          },
+        }),
+      );
+    }
     if (provider.tenantId) {
       url.searchParams.set("domain_hint", provider.tenantId);
     }
@@ -226,11 +246,15 @@ export class OidcService {
       }
     }
 
-    const mfaVerified =
-      amrIndicatesMfa(payload.amr) ||
-      String(payload.acr ?? "").toLowerCase().includes("mfa") ||
-      // Entra Conditional Access often omits amr; treat interactive federated login as MFA-capable when org disables local TOTP
-      false;
+    const mfaVerified = provider.mfaAuthenticationContext
+      ? acrsIncludesContext(payload.acrs, provider.mfaAuthenticationContext)
+      : false;
+
+    if (provider.mfaAuthenticationContext && !mfaVerified) {
+      throw new UnauthorizedError(
+        "Microsoft Entra MFA requirement was not satisfied for this sign-in",
+      );
+    }
 
     const { userId } = await federatedUserService.upsertFromIdp({
       organizationId: pending.organizationId,
@@ -244,10 +268,11 @@ export class OidcService {
       groupIds,
     });
 
-    // If Conditional Access is used, org setting disableLocalTotpWhenFederated means we trust IdP MFA.
+    // Local TOTP may be disabled only after a configured Entra Authentication
+    // Context was returned in the signed ID token.
     const { identitySettingsService } = await import("./identity-settings.service.js");
     const settings = await identitySettingsService.getOrCreate(pending.organizationId);
-    const trustIdpMfa = settings.disableLocalTotpWhenFederated || mfaVerified;
+    const trustIdpMfa = settings.disableLocalTotpWhenFederated && mfaVerified;
 
     const login = await authService.completeFederatedLogin(
       { organizationId: pending.organizationId, userId },
