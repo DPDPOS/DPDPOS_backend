@@ -13,6 +13,7 @@ export const appConfig = {
   },
   outboxPollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
   email: {
+    provider: env.EMAIL_PROVIDER ?? (env.NODE_ENV === "production" ? "SES_SMTP" : "MAILHOG"),
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
@@ -20,6 +21,7 @@ export const appConfig = {
     password: env.SMTP_PASSWORD,
     from: env.SMTP_FROM,
     requireAuth: env.SMTP_REQUIRE_AUTH,
+    workerConcurrency: env.EMAIL_WORKER_CONCURRENCY,
   },
   apiPublicUrl: env.API_PUBLIC_URL.replace(/\/$/, ""),
   frontendPublicUrl: env.FRONTEND_PUBLIC_URL.replace(/\/$/, ""),

@@ -1,6 +1,7 @@
-import { Worker } from "bullmq";
+import { UnrecoverableError, Worker } from "bullmq";
 import { createBullMqConnectionOptions } from "../../../infrastructure/queue/bullmq-connection.js";
-import { sendEmailOtp } from "../../../infrastructure/email/email-otp.sender.js";
+import { getEmailProvider } from "../../../infrastructure/email/ses-email.provider.js";
+import { appConfig } from "../../../config/app.config.js";
 import { logger } from "../../../infrastructure/logging/logger.js";
 import { QUEUE_NAMES } from "../../../jobs/queues/queue-names.js";
 import type { EmailOtpJob } from "../../../jobs/queues/email-otp.queue.js";
@@ -10,23 +11,28 @@ let worker: Worker<EmailOtpJob> | null = null;
 export function startEmailOtpWorker(): void {
   if (worker) return;
   worker = new Worker<EmailOtpJob>(
-    QUEUE_NAMES.EMAIL_OTP,
+    QUEUE_NAMES.EMAIL_CRITICAL,
     async (job) => {
-      if (job.data.expiresAt <= Date.now()) {
-        logger.warn({ jobId: job.id }, "email_otp.job_expired");
+      const { challengeId, userId, email, code, expiresAt } = job.data;
+      if (!challengeId || !userId || !email || !/^\S+@\S+\.\S+$/.test(email) || !/^\d{6}$/.test(code)) {
+        throw new UnrecoverableError("Invalid critical email job payload");
+      }
+      if (expiresAt <= Date.now()) {
+        logger.warn({ challengeId, userId }, "mfa.email_delivery_expired");
         return;
       }
-      await sendEmailOtp({
-        email: job.data.email,
-        code: job.data.code,
-        expiresInSeconds: Math.max(1, Math.floor((job.data.expiresAt - Date.now()) / 1000)),
+      const result = await getEmailProvider().sendMfaOtp({
+        recipient: email,
+        code,
+        expiresInSeconds: Math.max(1, Math.floor((expiresAt - Date.now()) / 1000)),
       });
+      logger.info({ challengeId, userId, provider: appConfig.email.provider, messageId: result.messageId }, "mfa.email_delivery_sent");
     },
-    { connection: createBullMqConnectionOptions(), concurrency: 5 },
+    { connection: createBullMqConnectionOptions(), concurrency: appConfig.email.workerConcurrency },
   );
-  worker.on("completed", (job) => logger.debug({ jobId: job.id }, "email_otp.job_completed"));
-  worker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "email_otp.job_failed"));
-  logger.info("email_otp.worker_started");
+  worker.on("completed", (job) => logger.debug({ challengeId: job.data.challengeId, userId: job.data.userId }, "mfa.email_delivery_completed"));
+  worker.on("failed", (job, err) => logger.error({ challengeId: job?.data.challengeId, userId: job?.data.userId, err: err.message }, "mfa.email_delivery_failed"));
+  logger.info({ queue: QUEUE_NAMES.EMAIL_CRITICAL, concurrency: appConfig.email.workerConcurrency }, "mfa.email_worker_started");
 }
 
 export function stopEmailOtpWorker(): Promise<void> {

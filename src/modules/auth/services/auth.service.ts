@@ -1,14 +1,14 @@
 import argon2 from "argon2";
-import { randomInt, timingSafeEqual } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import {
   UnauthorizedError,
   ValidationError,
+  RateLimitedError,
 } from "../../../shared/errors/app-error.js";
 import { appConfig } from "../../../config/app.config.js";
 import { getRedis } from "../../../infrastructure/cache/redis-client.js";
-import { sendEmailOtp } from "../../../infrastructure/email/email-otp.sender.js";
-import { emailOtpQueue } from "../../../jobs/queues/email-otp.queue.js";
+import { enqueueEmailOtp } from "../../../jobs/queues/email-otp.queue.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
@@ -24,6 +24,7 @@ import type {
   LogoutDto,
   MfaConfirmDto,
   MfaVerifyDto,
+  MfaResendDto,
   RefreshDto,
 } from "../dto/auth.dto.js";
 import { AuthRepository, type AuthUserRecord } from "../repositories/auth.repository.js";
@@ -83,6 +84,21 @@ export type LoginMfaChallengeResult = {
 
 export type LoginResult = LoginSuccessResult | LoginMfaChallengeResult;
 
+const MFA_TTL_SECONDS = 300;
+const MFA_MAX_VERIFY_ATTEMPTS = 5;
+const MFA_RESEND_COOLDOWN_SECONDS = 30;
+const MFA_MAX_RESENDS_PER_15_MINUTES = 5;
+const MFA_MAX_IP_RESENDS_PER_HOUR = 20;
+
+type EmailMfaChallenge = {
+  userId: string;
+  organizationId: string;
+  otpHash: string;
+  attempts: number;
+  resendCount: number;
+  lastSentAt: number;
+};
+
 export class AuthService {
   constructor(private readonly repo = new AuthRepository()) {}
 
@@ -136,9 +152,11 @@ export class AuthService {
     }
 
     if (claims.factor === "EMAIL_OTP") {
-      const key = `auth:email-otp:${hashToken(input.mfaToken)}`;
-      const stored = await getRedis().call("GETDEL", key);
-      if (typeof stored !== "string" || !this.codesMatch(stored, input.code)) {
+      if (!claims.challengeId) {
+        throw new UnauthorizedError("Invalid MFA challenge");
+      }
+      const outcome = await this.verifyEmailOtpChallenge(claims, input.code);
+      if (outcome !== "VERIFIED") {
         throw new UnauthorizedError("Invalid or expired MFA code");
       }
     } else {
@@ -167,6 +185,38 @@ export class AuthService {
       tokens,
       mfaEnrollmentRequired: false,
     };
+  }
+
+  async resendMfa(
+    input: MfaResendDto,
+    meta: { ipAddress?: string } = {},
+  ): Promise<{ mfaRequired: true; expiresIn: number; retryAfterSeconds: number }> {
+    const claims = verifyMfaChallengeToken(input.mfaToken);
+    if (claims.factor !== "EMAIL_OTP" || !claims.challengeId) {
+      throw new UnauthorizedError("This MFA challenge cannot be resent");
+    }
+    const user = await this.repo.findUserById({ organizationId: claims.organizationId, userId: claims.sub });
+    if (!user || user.status === "DISABLED") throw new UnauthorizedError("Invalid MFA challenge");
+    const now = Date.now();
+    const code = this.newOtp();
+    await this.enforceResendAbuseLimits(claims.sub, meta.ipAddress);
+    const updated = await this.rotateEmailOtpForResend(claims, hashToken(code), now);
+    if (updated === "MISSING") throw new UnauthorizedError("Invalid or expired MFA challenge");
+    if (updated === "COOLDOWN") {
+      throw new RateLimitedError(`Wait ${MFA_RESEND_COOLDOWN_SECONDS} seconds before requesting another code`);
+    }
+    if (updated === "LIMIT") {
+      throw new RateLimitedError("Too many MFA resend requests");
+    }
+    await this.queueEmailOtp({
+      challengeId: claims.challengeId,
+      userId: claims.sub,
+      email: user.email,
+      code,
+      expiresAt: now + updated.remainingTtlMs,
+      deliveryAttempt: updated.resendCount,
+    });
+    return { mfaRequired: true, expiresIn: MFA_TTL_SECONDS, retryAfterSeconds: MFA_RESEND_COOLDOWN_SECONDS };
   }
 
   async setupMfa(ctx: RequestContext): Promise<{
@@ -382,61 +432,132 @@ export class AuthService {
   private async createEmailOtpChallenge(
     user: AuthUserRecord,
   ): Promise<LoginMfaChallengeResult> {
+    const challengeId = randomUUID();
     const mfaToken = signMfaChallengeToken({
       userId: user.id,
       organizationId: user.organizationId,
       factor: "EMAIL_OTP",
+      challengeId,
     });
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const key = `auth:email-otp:${hashToken(mfaToken)}`;
+    const code = this.newOtp();
+    const key = this.emailChallengeKey(challengeId);
     const redis = getRedis();
-    await redis.set(key, hashToken(code), "EX", 300);
+    const challenge: EmailMfaChallenge = {
+      userId: user.id,
+      organizationId: user.organizationId,
+      otpHash: hashToken(code),
+      attempts: 0,
+      resendCount: 0,
+      lastSentAt: Date.now(),
+    };
+    await redis.set(key, JSON.stringify(challenge), "EX", MFA_TTL_SECONDS);
     try {
       await this.queueEmailOtp({
+        challengeId,
+        userId: user.id,
         email: user.email,
         code,
-        expiresAt: Date.now() + 300_000,
-        jobId: `email-otp-${hashToken(mfaToken)}`,
+        expiresAt: Date.now() + MFA_TTL_SECONDS * 1_000,
+        deliveryAttempt: 0,
       });
     } catch (error) {
       await redis.del(key);
       throw error;
     }
-    return { mfaRequired: true, mfaToken, expiresIn: 300 };
-  }
-
-  private codesMatch(expectedHash: string, code: string): boolean {
-    const actualHash = hashToken(code);
-    return timingSafeEqual(Buffer.from(expectedHash), Buffer.from(actualHash));
+    return { mfaRequired: true, mfaToken, expiresIn: MFA_TTL_SECONDS };
   }
 
   private async queueEmailOtp(input: {
+    challengeId: string;
+    userId: string;
     email: string;
     code: string;
     expiresAt: number;
-    jobId: string;
+    deliveryAttempt: number;
   }): Promise<void> {
-    // HTTP tests use the in-memory test mailbox. In normal operation the API
-    // only queues delivery; the worker owns SMTP calls and retries.
-    if (process.env.VITEST !== undefined) {
-      await sendEmailOtp({
-        email: input.email,
-        code: input.code,
-        expiresInSeconds: Math.max(1, Math.floor((input.expiresAt - Date.now()) / 1000)),
-      });
-      return;
-    }
-    await emailOtpQueue.add(
-      "send-email-otp",
-      { email: input.email, code: input.code, expiresAt: input.expiresAt },
-      {
-        jobId: input.jobId,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 1_000 },
-        removeOnComplete: 100,
-        removeOnFail: 500,
-      },
+    await enqueueEmailOtp(
+      { challengeId: input.challengeId, userId: input.userId, email: input.email, code: input.code, expiresAt: input.expiresAt },
+        // One logical delivery is idempotent. Resends get a separate delivery
+        // suffix while retaining the same challenge identity.
+      `mfa:${input.challengeId}:${input.deliveryAttempt}`,
     );
+  }
+
+  private newOtp(): string {
+    return String(randomInt(0, 1_000_000)).padStart(6, "0");
+  }
+
+  private emailChallengeKey(challengeId: string): string {
+    return `auth:mfa:email:${challengeId}`;
+  }
+
+  private async verifyEmailOtpChallenge(
+    claims: { challengeId?: string; sub: string; organizationId: string },
+    code: string,
+  ): Promise<"VERIFIED" | "INVALID"> {
+    const result = await getRedis().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw then return 0 end
+       local value = cjson.decode(raw)
+       if value.userId ~= ARGV[1] or value.organizationId ~= ARGV[2] then return 0 end
+       if value.attempts >= tonumber(ARGV[4]) then redis.call('DEL', KEYS[1]); return 0 end
+       if value.otpHash == ARGV[3] then redis.call('DEL', KEYS[1]); return 1 end
+       value.attempts = value.attempts + 1
+       if value.attempts >= tonumber(ARGV[4]) then redis.call('DEL', KEYS[1]) else redis.call('SET', KEYS[1], cjson.encode(value), 'KEEPTTL') end
+       return 0`,
+      1,
+      this.emailChallengeKey(claims.challengeId!),
+      claims.sub,
+      claims.organizationId,
+      hashToken(code),
+      String(MFA_MAX_VERIFY_ATTEMPTS),
+    );
+    return Number(result) === 1 ? "VERIFIED" : "INVALID";
+  }
+
+  private async rotateEmailOtpForResend(
+    claims: { challengeId?: string; sub: string; organizationId: string },
+    otpHash: string,
+    now: number,
+  ): Promise<"MISSING" | "COOLDOWN" | "LIMIT" | { resendCount: number; remainingTtlMs: number }> {
+    const result = await getRedis().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw then return {-1} end
+       local value = cjson.decode(raw)
+       if value.userId ~= ARGV[1] or value.organizationId ~= ARGV[2] then return {-1} end
+       if tonumber(ARGV[3]) - value.lastSentAt < tonumber(ARGV[4]) then return {0} end
+       if value.resendCount >= tonumber(ARGV[5]) then return {-2} end
+       value.otpHash = ARGV[6]
+       value.attempts = 0
+       value.resendCount = value.resendCount + 1
+       value.lastSentAt = tonumber(ARGV[3])
+       redis.call('SET', KEYS[1], cjson.encode(value), 'KEEPTTL')
+       return {value.resendCount, redis.call('PTTL', KEYS[1])}`,
+      1,
+      this.emailChallengeKey(claims.challengeId!),
+      claims.sub,
+      claims.organizationId,
+      String(now),
+      String(MFA_RESEND_COOLDOWN_SECONDS * 1_000),
+      String(MFA_MAX_RESENDS_PER_15_MINUTES),
+      otpHash,
+    ) as unknown as number[];
+    if (result[0] === -1) return "MISSING";
+    if (result[0] === 0) return "COOLDOWN";
+    if (result[0] === -2) return "LIMIT";
+    return { resendCount: result[0]!, remainingTtlMs: Math.max(1_000, result[1]!) };
+  }
+
+  private async enforceResendAbuseLimits(userId: string, ipAddress?: string): Promise<void> {
+    const redis = getRedis();
+    const userCount = await redis.incr(`auth:mfa:resend:user:${userId}`);
+    if (userCount === 1) await redis.expire(`auth:mfa:resend:user:${userId}`, 900);
+    if (userCount > MFA_MAX_RESENDS_PER_15_MINUTES) throw new RateLimitedError("Too many MFA resend requests for this account");
+    if (!ipAddress) return;
+    const key = `auth:mfa:resend:ip:${hashToken(ipAddress)}`;
+    const ipCount = await redis.incr(key);
+    if (ipCount === 1) await redis.expire(key, 3_600);
+    if (ipCount > MFA_MAX_IP_RESENDS_PER_HOUR) throw new RateLimitedError("Too many MFA resend requests from this network");
   }
 
   private async requireActiveUser(ctx: RequestContext): Promise<AuthUserRecord> {
