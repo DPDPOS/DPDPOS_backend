@@ -7,6 +7,7 @@ const mfaChallengeSchema = z.object({
   purpose: z.literal("mfa_challenge"),
   sub: z.string().uuid(),
   organizationId: z.string().uuid(),
+  factor: z.enum(["TOTP", "EMAIL_OTP"]).default("TOTP"),
 });
 
 export type MfaChallengeClaims = z.infer<typeof mfaChallengeSchema>;
@@ -16,12 +17,14 @@ const MFA_CHALLENGE_TTL_SECONDS = 300;
 export function signMfaChallengeToken(input: {
   userId: string;
   organizationId: string;
+  factor?: "TOTP" | "EMAIL_OTP";
 }): string {
   return jwt.sign(
     {
       purpose: "mfa_challenge",
       sub: input.userId,
       organizationId: input.organizationId,
+      factor: input.factor ?? "TOTP",
     },
     appConfig.jwt.accessSecret,
     { expiresIn: MFA_CHALLENGE_TTL_SECONDS },

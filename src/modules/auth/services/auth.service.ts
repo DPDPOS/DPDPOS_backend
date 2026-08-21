@@ -1,10 +1,13 @@
 import argon2 from "argon2";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import {
   UnauthorizedError,
   ValidationError,
 } from "../../../shared/errors/app-error.js";
 import { appConfig } from "../../../config/app.config.js";
+import { getRedis } from "../../../infrastructure/cache/redis-client.js";
+import { sendEmailOtp } from "../../../infrastructure/email/email-otp.sender.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
@@ -115,35 +118,7 @@ export class AuthService {
       throw new UnauthorizedError("Invalid email or password");
     }
 
-    const privileged = isPrivilegedRoleSet(user.roleNames);
-    if (privileged && user.mfaEnabled) {
-      return {
-        mfaRequired: true,
-        mfaToken: signMfaChallengeToken({
-          userId: user.id,
-          organizationId: user.organizationId,
-        }),
-        expiresIn: 300,
-      };
-    }
-
-    const activateIfInvited = user.status === "INVITED";
-    const tokens = await this.issueSession(user, meta, {
-      emitLoginEvent: true,
-      activateIfInvited,
-      correlationId: meta.correlationId,
-      mfaVerified: false,
-    });
-
-    return {
-      mfaRequired: false,
-      user: this.toMe(
-        { ...user, status: activateIfInvited ? "ACTIVE" : user.status },
-        privileged && !user.mfaEnabled,
-      ),
-      tokens,
-      mfaEnrollmentRequired: privileged && !user.mfaEnabled,
-    };
+    return this.createEmailOtpChallenge(user);
   }
 
   async verifyMfa(
@@ -155,25 +130,39 @@ export class AuthService {
       organizationId: claims.organizationId,
       userId: claims.sub,
     });
-    if (!user || !user.mfaEnabled || !user.mfaSecretEnc) {
-      throw new UnauthorizedError("MFA is not enabled for this account");
+    if (!user) {
+      throw new UnauthorizedError("Invalid MFA challenge");
     }
 
-    const secret = decryptSecret(user.mfaSecretEnc);
-    if (!verifyTotpCode(secret, input.code)) {
-      throw new UnauthorizedError("Invalid MFA code");
+    if (claims.factor === "EMAIL_OTP") {
+      const key = `auth:email-otp:${hashToken(input.mfaToken)}`;
+      const stored = await getRedis().call("GETDEL", key);
+      if (typeof stored !== "string" || !this.codesMatch(stored, input.code)) {
+        throw new UnauthorizedError("Invalid or expired MFA code");
+      }
+    } else {
+      if (!user.mfaEnabled || !user.mfaSecretEnc) {
+        throw new UnauthorizedError("MFA is not enabled for this account");
+      }
+      const secret = decryptSecret(user.mfaSecretEnc);
+      if (!verifyTotpCode(secret, input.code)) {
+        throw new UnauthorizedError("Invalid MFA code");
+      }
     }
 
     const tokens = await this.issueSession(user, meta, {
       emitLoginEvent: true,
-      activateIfInvited: false,
+      activateIfInvited: user.status === "INVITED",
       correlationId: meta.correlationId,
       mfaVerified: true,
     });
 
     return {
       mfaRequired: false,
-      user: this.toMe(user, false),
+      user: this.toMe(
+        { ...user, status: user.status === "INVITED" ? "ACTIVE" : user.status },
+        false,
+      ),
       tokens,
       mfaEnrollmentRequired: false,
     };
@@ -387,6 +376,32 @@ export class AuthService {
   private async shouldSkipLocalTotp(organizationId: string): Promise<boolean> {
     const settings = await this.safeIdentitySettings(organizationId);
     return settings.disableLocalTotpWhenFederated;
+  }
+
+  private async createEmailOtpChallenge(
+    user: AuthUserRecord,
+  ): Promise<LoginMfaChallengeResult> {
+    const mfaToken = signMfaChallengeToken({
+      userId: user.id,
+      organizationId: user.organizationId,
+      factor: "EMAIL_OTP",
+    });
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const key = `auth:email-otp:${hashToken(mfaToken)}`;
+    const redis = getRedis();
+    await redis.set(key, hashToken(code), "EX", 300);
+    try {
+      await sendEmailOtp({ email: user.email, code, expiresInSeconds: 300 });
+    } catch (error) {
+      await redis.del(key);
+      throw error;
+    }
+    return { mfaRequired: true, mfaToken, expiresIn: 300 };
+  }
+
+  private codesMatch(expectedHash: string, code: string): boolean {
+    const actualHash = hashToken(code);
+    return timingSafeEqual(Buffer.from(expectedHash), Buffer.from(actualHash));
   }
 
   private async requireActiveUser(ctx: RequestContext): Promise<AuthUserRecord> {
