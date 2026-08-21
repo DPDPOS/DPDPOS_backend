@@ -11,6 +11,7 @@ import {
 import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 
 import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+import { loginWithEmailOtp } from "../../src/test-utils/login-as.js";
 
 /**
  * Cross-module happy path for Developer B — Feature INV-002:
@@ -78,11 +79,8 @@ describe("Dev B processing activity end-to-end", () => {
       },
     });
 
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email, password })
-      .expect(200);
-    accessToken = login.body.data.tokens.accessToken as string;
+    const login = await loginWithEmailOtp(app, { organizationId, email, password });
+    accessToken = login.tokens.accessToken;
 
     // 3) Data asset (INV-001 prerequisite)
     const asset = await request(app)

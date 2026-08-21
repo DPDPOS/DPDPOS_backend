@@ -11,6 +11,7 @@ import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 import { PERMISSIONS } from "../../src/shared/constants/permissions.js";
 
 import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+import { loginWithEmailOtp } from "../../src/test-utils/login-as.js";
 
 /**
  * Cross-module happy path for Developer A:
@@ -83,15 +84,12 @@ describe("Dev A end-to-end integration", () => {
       },
     });
 
-    // 2) Login activates invited user and returns permissions
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email, password })
-      .expect(200);
+    // 2) Login activates invited user and returns permissions (email OTP challenge)
+    const login = await loginWithEmailOtp(app, { organizationId, email, password });
 
-    accessToken = login.body.data.tokens.accessToken as string;
-    expect(login.body.data.user.status).toBe("ACTIVE");
-    expect(login.body.data.user.permissions).toContain(PERMISSIONS.FRAMEWORK_GENERATE);
+    accessToken = login.tokens.accessToken;
+    expect(login.user.status).toBe("ACTIVE");
+    expect(login.user.permissions).toContain(PERMISSIONS.FRAMEWORK_GENERATE);
 
     const me = await request(app)
       .get("/api/v1/auth/me")
@@ -266,16 +264,13 @@ describe("Dev A end-to-end integration", () => {
       return;
     }
 
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({
-        organizationId: seedOrgId,
-        email: "admin@demo.dpdpos.local",
-        password: "ChangeMe123!",
-      })
-      .expect(200);
+    const login = await loginWithEmailOtp(app, {
+      organizationId: seedOrgId,
+      email: "admin@demo.dpdpos.local",
+      password: "ChangeMe123!",
+    });
 
-    const token = login.body.data.tokens.accessToken as string;
+    const token = login.tokens.accessToken;
     await request(app)
       .get("/api/v1/departments")
       .set("Authorization", `Bearer ${token}`)

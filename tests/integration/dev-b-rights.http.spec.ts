@@ -11,6 +11,7 @@ import {
 import { DOMAIN_EVENTS } from "../../src/events/types/base-event.interface.js";
 
 import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+import { loginWithEmailOtp } from "../../src/test-utils/login-as.js";
 
 /**
  * Cross-module happy path for Developer B — Feature RGT-002:
@@ -81,11 +82,8 @@ describe("Dev B rights management end-to-end", () => {
       },
     });
 
-    const login = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email, password })
-      .expect(200);
-    accessToken = login.body.data.tokens.accessToken as string;
+    const login = await loginWithEmailOtp(app, { organizationId, email, password });
+    accessToken = login.tokens.accessToken;
 
     // 3) Assignee user (plain user in the same org, no special role needed)
     const assignee = await prisma.user.create({
@@ -234,11 +232,12 @@ describe("Dev B rights management end-to-end", () => {
       },
     });
 
-    const memberLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email: memberUser.email, password })
-      .expect(200);
-    const memberToken = memberLogin.body.data.tokens.accessToken as string;
+    const memberLogin = await loginWithEmailOtp(app, {
+      organizationId,
+      email: memberUser.email,
+      password,
+    });
+    const memberToken = memberLogin.tokens.accessToken;
 
     await request(app)
       .get("/api/v1/data-subject-requests")
@@ -273,11 +272,12 @@ describe("Dev B rights management end-to-end", () => {
       },
     });
 
-    const officerLogin = await request(app)
-      .post("/api/v1/auth/login")
-      .send({ organizationId, email: officerUser.email, password })
-      .expect(200);
-    const officerToken = officerLogin.body.data.tokens.accessToken as string;
+    const officerLogin = await loginWithEmailOtp(app, {
+      organizationId,
+      email: officerUser.email,
+      password,
+    });
+    const officerToken = officerLogin.tokens.accessToken;
 
     const officerCreated = await request(app)
       .post("/api/v1/data-subject-requests")
