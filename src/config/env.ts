@@ -41,6 +41,14 @@ const envSchema = z.object({
   // Use localhost (not 127.0.0.1): Entra only allows http://localhost redirect URIs.
   API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_PUBLIC_URL: z.string().url().default("http://localhost:3001"),
+  /**
+   * Master switch for login MFA (email OTP + TOTP challenges) and privileged
+   * requireMfa middleware. MFA code paths remain; set "false" to skip them.
+   */
+  AUTH_MFA_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value !== "false"),
 });
 
 export type Env = z.infer<typeof envSchema>;

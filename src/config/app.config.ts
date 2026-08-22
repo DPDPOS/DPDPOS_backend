@@ -22,4 +22,8 @@ export const appConfig = {
   },
   apiPublicUrl: env.API_PUBLIC_URL.replace(/\/$/, ""),
   frontendPublicUrl: env.FRONTEND_PUBLIC_URL.replace(/\/$/, ""),
+  auth: {
+    /** When false, password login skips email OTP / TOTP challenges. */
+    mfaEnabled: env.AUTH_MFA_ENABLED,
+  },
 } as const;

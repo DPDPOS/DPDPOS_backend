@@ -118,6 +118,11 @@ export class AuthService {
       throw new UnauthorizedError("Invalid email or password");
     }
 
+    // Toggle: AUTH_MFA_ENABLED=false skips email OTP / TOTP (code paths retained).
+    if (!appConfig.auth.mfaEnabled) {
+      return this.completeLoginWithoutMfaChallenge(user, meta);
+    }
+
     return this.createEmailOtpChallenge(user);
   }
 
@@ -303,9 +308,16 @@ export class AuthService {
     const user = await this.requireActiveUser(ctx);
     const privileged = isPrivilegedRoleSet(user.roleNames);
     const skipLocalTotp =
-      user.authSource !== "LOCAL" &&
-      (await this.shouldSkipLocalTotp(user.organizationId));
-    return this.toMe(user, privileged && !user.mfaEnabled && !skipLocalTotp);
+      !appConfig.auth.mfaEnabled ||
+      (user.authSource !== "LOCAL" &&
+        (await this.shouldSkipLocalTotp(user.organizationId)));
+    return this.toMe(
+      user,
+      appConfig.auth.mfaEnabled &&
+        privileged &&
+        !user.mfaEnabled &&
+        !skipLocalTotp,
+    );
   }
 
   /** Used by identity federation after IdP proof. Does not verify password. */
@@ -320,7 +332,12 @@ export class AuthService {
     }
 
     const privileged = isPrivilegedRoleSet(user.roleNames);
-    if (privileged && user.mfaEnabled && !options.mfaVerified) {
+    if (
+      appConfig.auth.mfaEnabled &&
+      privileged &&
+      user.mfaEnabled &&
+      !options.mfaVerified
+    ) {
       return {
         mfaRequired: true,
         mfaToken: signMfaChallengeToken({
@@ -336,19 +353,25 @@ export class AuthService {
       emitLoginEvent: true,
       activateIfInvited,
       correlationId: meta.correlationId,
-      mfaVerified: options.mfaVerified,
+      mfaVerified: options.mfaVerified || !appConfig.auth.mfaEnabled,
     });
 
-    const skipLocalTotp = await this.shouldSkipLocalTotp(user.organizationId);
+    const skipLocalTotp =
+      !appConfig.auth.mfaEnabled ||
+      (await this.shouldSkipLocalTotp(user.organizationId));
 
     return {
       mfaRequired: false,
       user: this.toMe(
         { ...user, status: activateIfInvited ? "ACTIVE" : user.status },
-        privileged && !user.mfaEnabled && !skipLocalTotp,
+        appConfig.auth.mfaEnabled && privileged && !user.mfaEnabled && !skipLocalTotp,
       ),
       tokens,
-      mfaEnrollmentRequired: privileged && !user.mfaEnabled && !skipLocalTotp,
+      mfaEnrollmentRequired:
+        appConfig.auth.mfaEnabled &&
+        privileged &&
+        !user.mfaEnabled &&
+        !skipLocalTotp,
     };
   }
 
@@ -397,6 +420,29 @@ export class AuthService {
       throw error;
     }
     return { mfaRequired: true, mfaToken, expiresIn: 300 };
+  }
+
+  /** Password-login success path when AUTH_MFA_ENABLED=false. */
+  private async completeLoginWithoutMfaChallenge(
+    user: AuthUserRecord,
+    meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
+  ): Promise<LoginSuccessResult> {
+    const tokens = await this.issueSession(user, meta, {
+      emitLoginEvent: true,
+      activateIfInvited: user.status === "INVITED",
+      correlationId: meta.correlationId,
+      mfaVerified: true,
+    });
+
+    return {
+      mfaRequired: false,
+      user: this.toMe(
+        { ...user, status: user.status === "INVITED" ? "ACTIVE" : user.status },
+        false,
+      ),
+      tokens,
+      mfaEnrollmentRequired: false,
+    };
   }
 
   private codesMatch(expectedHash: string, code: string): boolean {
