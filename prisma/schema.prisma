@@ -1294,6 +1294,9 @@ model ScanJob {
   cliVersion     String        @map("cli_version")
   status         ScanJobStatus @default(PENDING)
   findingsCount  Int           @default(0) @map("findings_count")
+  /** Optional AI enrichment context from dpdp-cli --ai (Groq, etc.).
+   * Informational only — does NOT affect deterministic evaluation. */
+  aiContext      Json?         @map("ai_context")
   startedAt      DateTime      @default(now()) @map("started_at")
   finishedAt     DateTime?     @map("finished_at")
   createdAt      DateTime      @default(now()) @map("created_at")
