@@ -541,6 +541,8 @@ export class AssessmentService {
           status: "COMPLETED",
           findingsCount: dto.findings.length,
           finishedAt: new Date(),
+          // Informational only — does NOT affect deterministic control evaluation.
+          aiContext: dto.aiContext as Prisma.InputJsonValue | undefined,
         },
       });
       await tx.assessment.update({

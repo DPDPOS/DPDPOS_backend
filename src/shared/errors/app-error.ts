@@ -76,3 +76,10 @@ export class ServiceUnavailableError extends AppError {
     this.name = "ServiceUnavailableError";
   }
 }
+
+export class RateLimitedError extends AppError {
+  constructor(message = "Too many requests") {
+    super({ code: "RATE_LIMITED", message, statusCode: 429 });
+    this.name = "RateLimitedError";
+  }
+}

@@ -42,9 +42,14 @@ export const mfaVerifyDtoSchema = z
   })
   .strict();
 
+export const mfaResendDtoSchema = z
+  .object({ mfaToken: z.string().min(1) })
+  .strict();
+
 export type LoginDto = z.infer<typeof loginDtoSchema>;
 export type RefreshDto = z.infer<typeof refreshDtoSchema>;
 export type LogoutDto = z.infer<typeof logoutDtoSchema>;
 export type AcceptInviteDto = z.infer<typeof acceptInviteDtoSchema>;
 export type MfaConfirmDto = z.infer<typeof mfaConfirmDtoSchema>;
 export type MfaVerifyDto = z.infer<typeof mfaVerifyDtoSchema>;
+export type MfaResendDto = z.infer<typeof mfaResendDtoSchema>;

@@ -88,9 +88,33 @@ export const findingSchema = z.object({
   sourceHash: z.string().max(128).optional(),
 });
 
+/**
+ * Optional AI enrichment context from dpdp-cli --ai.
+ * Informational only — does NOT affect deterministic control evaluation.
+ */
+export const aiClassificationSchema = z.object({
+  location: z.string().min(1).max(500),
+  findingType: z.string().min(1).max(100),
+  classification: z.enum([
+    "positive_evidence",
+    "reference_only",
+    "negative_evidence",
+  ]),
+  reasoning: z.string().min(1).max(2000),
+  confidence: z.number().min(0).max(1),
+});
+
+export const aiContextSchema = z.object({
+  classifiedAt: z.string().min(1).max(100),
+  provider: z.string().min(1).max(100),
+  model: z.string().min(1).max(100),
+  classifications: z.array(aiClassificationSchema).min(1).max(5000),
+});
+
 export const evidenceBatchSchema = z.object({
   scanJobId: z.string().uuid(),
   findings: z.array(findingSchema).min(1).max(5000),
+  aiContext: aiContextSchema.optional(),
 });
 export type EvidenceBatchDto = z.infer<typeof evidenceBatchSchema>;
 

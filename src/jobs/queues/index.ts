@@ -6,4 +6,5 @@ export { auditQueue } from "./audit.queue.js";
 export { retentionQueue } from "./retention.queue.js";
 export { exportQueue } from "./export.queue.js";
 export { eventRelayQueue } from "./event-relay.queue.js";
+export { emailOtpQueue } from "./email-otp.queue.js";
 export { QUEUE_NAMES } from "./queue-names.js";

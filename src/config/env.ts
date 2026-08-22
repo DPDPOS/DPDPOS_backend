@@ -1,6 +1,11 @@
 import { z } from "zod";
 import "dotenv/config";
 
+const optionalNonEmptyString = z
+  .string()
+  .optional()
+  .transform((value) => value || undefined);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -28,16 +33,24 @@ const envSchema = z.object({
     .transform((value) => value || undefined),
   AI_MODEL: z.string().optional(),
   AI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
-  // SMTP delivery for the email OTP required after local password login.
-  SMTP_HOST: z.string().min(1).optional(),
+  // Critical transactional email delivery (MailHog locally, SES SMTP in production).
+  EMAIL_PROVIDER: z.enum(["MAILHOG", "SES_SMTP"]).optional(),
+  SMTP_HOST: optionalNonEmptyString,
   SMTP_PORT: z.coerce.number().int().positive().max(65535).default(587),
   SMTP_SECURE: z
     .string()
     .optional()
     .transform((value) => value === "true"),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
-  SMTP_FROM: z.string().min(1).optional(),
+  SMTP_USER: optionalNonEmptyString,
+  SMTP_PASSWORD: optionalNonEmptyString,
+  SMTP_FROM: optionalNonEmptyString,
+  SMTP_REQUIRE_AUTH: z
+    .string()
+    .optional()
+    .transform((value) => value !== "false"),
+  EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().positive().max(100).default(10),
+  EMAIL_RATE_LIMIT_MAX: z.coerce.number().int().positive().max(10_000).default(10),
+  EMAIL_RATE_LIMIT_DURATION_MS: z.coerce.number().int().positive().max(3_600_000).default(1_000),
   // Use localhost (not 127.0.0.1): Entra only allows http://localhost redirect URIs.
   API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_PUBLIC_URL: z.string().url().default("http://localhost:3001"),
@@ -49,6 +62,14 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value !== "false"),
+}).superRefine((value, ctx) => {
+  const provider = value.EMAIL_PROVIDER ?? (value.NODE_ENV === "production" ? "SES_SMTP" : "MAILHOG");
+  if (value.NODE_ENV === "production" && provider !== "SES_SMTP") {
+    ctx.addIssue({ code: "custom", path: ["EMAIL_PROVIDER"], message: "Production email delivery must use SES_SMTP" });
+  }
+  if (value.NODE_ENV === "production" && (!value.SMTP_REQUIRE_AUTH || !value.SMTP_HOST || !value.SMTP_FROM || !value.SMTP_USER || !value.SMTP_PASSWORD)) {
+    ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "SES SMTP host, user, password, and from address are required in production" });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

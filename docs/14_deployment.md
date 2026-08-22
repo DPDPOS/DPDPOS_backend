@@ -264,6 +264,38 @@ Jobs only run while the Free web service is awake (it sleeps after ~15 minutes i
 
 Paid option: a separate Background Worker with start command `npm run start:worker` and the same env vars as the API.
 
+### MFA email delivery (Amazon SES)
+
+For production, deploy the API and worker independently. They share the same managed Redis, but only the worker consumes the `email-critical` BullMQ queue and connects to SES. The flow is: frontend -> API -> Redis MFA challenge -> `email-critical` -> worker -> Amazon SES SMTP -> user. Do not deploy an SMTP server or MailHog in production.
+
+Add these variables to both the API and worker deployments (values must be managed as deployment secrets):
+
+```env
+EMAIL_PROVIDER=SES_SMTP
+SMTP_HOST=
+SMTP_PORT=
+SMTP_SECURE=
+SMTP_REQUIRE_AUTH=
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+EMAIL_WORKER_CONCURRENCY=
+EMAIL_RATE_LIMIT_MAX=
+EMAIL_RATE_LIMIT_DURATION_MS=
+```
+
+`EMAIL_WORKER_CONCURRENCY` controls parallel processing within one worker. `EMAIL_RATE_LIMIT_MAX` and `EMAIL_RATE_LIMIT_DURATION_MS` use BullMQ's Redis-backed global limiter, so scaling workers does not multiply the SES send rate. Set them from the SES quota for the chosen region; do not hardcode a quota in application code.
+
+SES setup still required outside this repository:
+
+1. Choose the SES region and verify the sender address or domain.
+2. Configure DKIM and SPF/DNS for that domain.
+3. Create SES SMTP credentials (these are not normal AWS console credentials).
+4. Request SES production access if the account is in the SES sandbox.
+5. Put SMTP credentials only in the deployment secret store.
+
+Troubleshooting: a growing `email-critical` queue usually means the worker is stopped or SES is failing; SES authentication errors are terminal until configuration is corrected; throttling is retried and means the global limiter should be lowered; emails to unverified recipients in the SES sandbox will not be delivered. OTP jobs contain a plaintext code only while queued, then are retained for at most 10 minutes after success and one hour after failure.
+
 ---
 
 ## 7. Deploy the frontend on Vercel

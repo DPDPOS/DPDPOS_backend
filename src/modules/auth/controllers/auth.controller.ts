@@ -11,6 +11,7 @@ import type {
   LoginDto,
   LogoutDto,
   MfaConfirmDto,
+  MfaResendDto,
   MfaVerifyDto,
   RefreshDto,
 } from "../dto/auth.dto.js";
@@ -39,6 +40,15 @@ export class AuthController {
         ipAddress: req.ip,
         correlationId: getCorrelationId(),
       });
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async resendMfa(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.resendMfa(req.body as MfaResendDto, { ipAddress: req.ip });
       sendSuccess(res, result);
     } catch (err) {
       next(err);

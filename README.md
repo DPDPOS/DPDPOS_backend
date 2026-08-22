@@ -129,7 +129,13 @@ See **`docs/auth-guards.md`** for the copy-paste pattern, `RequestContext` field
 | POST | `/api/v1/auth/logout` | body: `refreshToken`; optional Bearer access token for deny-list |
 | GET | `/api/v1/auth/me` | Bearer required |
 
-Password login always returns an email-OTP MFA challenge. Configure the SMTP variables in `.env`; users must submit the six-digit code through `/api/v1/auth/mfa/verify` before receiving session tokens.
+`POST /api/v1/auth/mfa/resend` accepts `{ "mfaToken": "..." }` and requests a replacement code.
+
+Password login always returns an email-OTP MFA challenge. The API stores only the OTP hash in Redis and enqueues delivery on the dedicated `email-critical` BullMQ queue; it never opens an SMTP connection. A worker (`npm run dev:worker` locally, `npm run start:worker` in production) owns email delivery and retries jobs four times with exponential backoff. Users submit the six-digit code through `/api/v1/auth/mfa/verify` before receiving session tokens. Codes expire after five minutes, are single-use, and lock after five failed verification attempts.
+
+For local email testing, `npm run docker:up` starts MailHog. Keep `npm run dev:worker` running as well; OTP delivery is queued and sent by the worker. Open `http://localhost:8025` to view messages. For Gmail/production SMTP, set `SMTP_REQUIRE_AUTH=true` together with the provider credentials.
+
+For production, deploy the API and worker as separate processes/services that share the same managed Redis. Set `EMAIL_PROVIDER=SES_SMTP`, `SMTP_HOST=email-smtp.<region>.amazonaws.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_REQUIRE_AUTH=true`, `SMTP_USER`, `SMTP_PASSWORD`, and a verified `SMTP_FROM` address. The application refuses to boot in production if the SES configuration is missing. SES is the external email service; there is no SMTP server, MailHog, or Redis/BullMQ deployment inside the backend. Set `EMAIL_WORKER_CONCURRENCY` (default `10`) based on SES send-rate limits. `/mfa/resend` has a 30-second cooldown, maximum five account resends per 15 minutes, and an IP limit of 20 per hour. Secrets belong only in the deployment secret store, never in Git. Gmail is not the production provider for this architecture.
 
 Demo seed: `admin@demo.dpdpos.local` / `ChangeMe123!` on org `00000000-0000-4000-8000-000000000001`.
 

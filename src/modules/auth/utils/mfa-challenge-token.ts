@@ -7,6 +7,7 @@ const mfaChallengeSchema = z.object({
   purpose: z.literal("mfa_challenge"),
   sub: z.string().uuid(),
   organizationId: z.string().uuid(),
+  challengeId: z.string().uuid().optional(),
   factor: z.enum(["TOTP", "EMAIL_OTP"]).default("TOTP"),
 });
 
@@ -17,6 +18,7 @@ const MFA_CHALLENGE_TTL_SECONDS = 300;
 export function signMfaChallengeToken(input: {
   userId: string;
   organizationId: string;
+  challengeId?: string;
   factor?: "TOTP" | "EMAIL_OTP";
 }): string {
   return jwt.sign(
@@ -24,6 +26,7 @@ export function signMfaChallengeToken(input: {
       purpose: "mfa_challenge",
       sub: input.userId,
       organizationId: input.organizationId,
+      ...(input.challengeId ? { challengeId: input.challengeId } : {}),
       factor: input.factor ?? "TOTP",
     },
     appConfig.jwt.accessSecret,

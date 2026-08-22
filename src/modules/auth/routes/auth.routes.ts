@@ -7,6 +7,7 @@ import {
   loginDtoSchema,
   logoutDtoSchema,
   mfaConfirmDtoSchema,
+  mfaResendDtoSchema,
   mfaVerifyDtoSchema,
   refreshDtoSchema,
 } from "../dto/auth.dto.js";
@@ -24,6 +25,12 @@ export function createAuthRouter(): Router {
     "/mfa/verify",
     validateBody(mfaVerifyDtoSchema),
     (req, res, next) => void authController.verifyMfa(req, res, next),
+  );
+
+  router.post(
+    "/mfa/resend",
+    validateBody(mfaResendDtoSchema),
+    (req, res, next) => void authController.resendMfa(req, res, next),
   );
 
   router.post(

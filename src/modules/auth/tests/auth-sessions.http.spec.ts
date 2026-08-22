@@ -178,6 +178,32 @@ describe("Auth JWT sessions HTTP API", () => {
     });
   });
 
+  it("locks an email challenge after five bad codes and throttles immediate resends", async () => {
+    const challenge = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ organizationId, email, password })
+      .expect(200);
+
+    const mfaToken = challenge.body.data.mfaToken as string;
+    await request(app)
+      .post("/api/v1/auth/mfa/resend")
+      .send({ mfaToken })
+      .expect(429);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(app)
+        .post("/api/v1/auth/mfa/verify")
+        .send({ mfaToken, code: "000000" })
+        .expect(401);
+    }
+
+    const correctCode = getLastEmailOtpForTest(email);
+    await request(app)
+      .post("/api/v1/auth/mfa/verify")
+      .send({ mfaToken, code: correctCode })
+      .expect(401);
+  });
+
   it("requires auth for /me", async () => {
     await request(app).get("/api/v1/auth/me").expect(401);
     await request(app)
