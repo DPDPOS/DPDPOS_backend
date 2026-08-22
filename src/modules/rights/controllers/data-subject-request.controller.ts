@@ -14,6 +14,7 @@ import type {
 } from "../dto/data-subject-request.dto.js";
 
 import { dataSubjectRequestService } from "../services/data-subject-request.service.js";
+import { erasureEvidenceService } from "../services/erasure-evidence.service.js";
 
 export class DataSubjectRequestController {
   async submit(
@@ -26,6 +27,13 @@ export class DataSubjectRequestController {
       const body = req.body as CreateDataSubjectRequestDto;
 
       const request = await dataSubjectRequestService.submit(ctx, body);
+
+      if (body.requestType === "ERASURE") {
+        await erasureEvidenceService.startErasure(ctx, request.id, {
+          immediate: body.immediateErase,
+          coolingOffDays: body.coolingOffDays,
+        });
+      }
 
       sendSuccess(res, request, 201);
     } catch (err) {
@@ -83,6 +91,76 @@ export class DataSubjectRequestController {
       const request = await dataSubjectRequestService.update(ctx, id, body);
 
       sendSuccess(res, request);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async startErasure(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const body = req.body as { immediate?: boolean; coolingOffDays?: number };
+      const pack = await erasureEvidenceService.startErasure(ctx, id, body);
+      sendSuccess(res, pack);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getErasure(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const pack = await erasureEvidenceService.getErasurePack(ctx, id);
+      sendSuccess(res, pack);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async confirmErasureItem(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const body = req.body as {
+        systemKey: string;
+        status: "DONE" | "SKIPPED" | "FAILED";
+        notes?: string;
+      };
+      const item = await erasureEvidenceService.confirmChecklistItem(
+        ctx,
+        id,
+        body,
+      );
+      sendSuccess(res, item);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async completeErasure(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const evidence = await erasureEvidenceService.completeHardErase(ctx, id);
+      sendSuccess(res, evidence);
     } catch (err) {
       next(err);
     }

@@ -614,6 +614,24 @@ export class AssessmentService {
       );
     }
 
+    const vendors = await prisma.vendor.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        status: { in: ["ACTIVE", "DRAFT"] },
+      },
+      include: {
+        agreements: {
+          where: { status: "ACTIVE", deletedAt: null },
+          take: 1,
+        },
+      },
+    });
+    const activeVendors = vendors.filter((v) => v.status === "ACTIVE");
+    const vendorsMissingDpa = activeVendors.filter(
+      (v) => v.agreements.length === 0,
+    ).length;
+
     const evaluated = evaluateControls({
       findings: findings.map((f) => ({
         id: f.id,
@@ -628,6 +646,10 @@ export class AssessmentService {
       })),
       documentTexts: readyDocs.map((d) => d.extractedText ?? "").filter(Boolean),
       documentTypes: readyDocs.map((d) => d.documentType),
+      vendorLive: {
+        liveVendorCount: vendors.length,
+        vendorsMissingDpa,
+      },
     });
 
     await prisma.$transaction(async (tx) => {

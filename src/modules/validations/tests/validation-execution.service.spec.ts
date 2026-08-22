@@ -95,13 +95,15 @@ describe("Validation engine (VLD-003)", () => {
     return asset.id;
   }
 
-  it("registers evaluators for all five default rule codes", () => {
+  it("registers evaluators for all default rule codes", () => {
     for (const code of [
       "notice-present",
       "consent-present",
       "consent-withdrawn-correctly",
       "retention-metadata-set",
       "request-responded-within-sla",
+      "vendor-dpa-present",
+      "vendor-review-current",
     ]) {
       const evaluator = resolveEvaluator(code);
       expect(evaluator).not.toBeNull();
@@ -129,17 +131,17 @@ describe("Validation engine (VLD-003)", () => {
     expect(completed.durationMs).not.toBeNull();
     expect(completed.durationMs!).toBeGreaterThanOrEqual(0);
 
-    // Fresh org → all 5 defaults seeded and evaluated.
+    // Fresh org → all 7 defaults seeded and evaluated.
     const seeded = await prisma.validationRule.findMany({
       where: { organizationId: orgId, deletedAt: null },
     });
-    expect(seeded.length).toBe(5);
+    expect(seeded.length).toBe(7);
     seeded.forEach((r) => createdRuleIds.push(r.id));
 
     const results = await prisma.validationResult.findMany({
       where: { runId: run.id },
     });
-    expect(results.length).toBe(5);
+    expect(results.length).toBe(7);
 
     // notice-present must FAIL for an org with no notices.
     const noticeResult = results.find((r) => r.ruleCode === "notice-present");
@@ -172,7 +174,7 @@ describe("Validation engine (VLD-003)", () => {
     const results = await prisma.validationResult.findMany({
       where: { runId: run.id },
     });
-    expect(results.length).toBe(5);
+    expect(results.length).toBe(7);
   });
 
   it("marks a run PARTIAL when a rule evaluation errors", async () => {
@@ -364,7 +366,7 @@ describe("Validation engine (VLD-003)", () => {
 
     const detail = await runsService.getById(ctx, run.id);
     expect(detail.id).toBe(run.id);
-    expect(detail.results.length).toBe(5);
+    expect(detail.results.length).toBe(7);
 
     const all = await runsService.list(ctx);
     expect(all.some((r) => r.id === run.id)).toBe(true);

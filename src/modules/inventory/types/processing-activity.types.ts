@@ -2,6 +2,7 @@ export type ProcessingActivityRecord = {
   id: string;
   organizationId: string;
   dataAssetId: string;
+  vendorId: string | null;
 
   purpose: string;
 
@@ -23,6 +24,7 @@ export type ProcessingActivityRecord = {
 export type ProcessingActivityResponse = {
   id: string;
   dataAssetId: string;
+  vendorId: string | null;
 
   purpose: string;
 
@@ -43,6 +45,7 @@ export function toProcessingActivityResponse(
   return {
     id: activity.id,
     dataAssetId: activity.dataAssetId,
+    vendorId: activity.vendorId,
 
     purpose: activity.purpose,
 

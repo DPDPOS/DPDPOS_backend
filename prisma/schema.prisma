@@ -83,6 +83,7 @@ model Organization {
   outboxEvents         OutboxEvent[]
   dataAssets           DataAsset[]
   processingActivities ProcessingActivity[]
+  vendors              Vendor[]
   notices              Notice[]
   consentRecords       ConsentRecord[]
   dataSubjectRequests  DataSubjectRequest[]
@@ -132,6 +133,7 @@ model User {
   headedDepartments        Department[]         @relation("DepartmentHead")
   refreshSessions          RefreshSession[]
   ownedDataAssets          DataAsset[]          @relation("DataAssetOwner")
+  ownedVendors             Vendor[]             @relation("VendorOwner")
   assignedRequests         DataSubjectRequest[] @relation("DataSubjectRequestAssignee")
   assignedViolations       Violation[]          @relation("ViolationAssignee")
   assignedRemediationTasks RemediationTask[]    @relation("RemediationTaskAssignee")
@@ -485,6 +487,7 @@ model ProcessingActivity {
 
   organizationId String @map("organization_id") @db.Uuid
   dataAssetId    String @map("data_asset_id") @db.Uuid
+  vendorId       String? @map("vendor_id") @db.Uuid
 
   purpose       String
   sourceSystem  String? @map("source_system")
@@ -504,10 +507,223 @@ model ProcessingActivity {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   dataAsset DataAsset @relation(fields: [dataAssetId], references: [id])
+  vendor    Vendor?   @relation(fields: [vendorId], references: [id])
 
   @@index([organizationId])
   @@index([dataAssetId])
+  @@index([vendorId])
   @@map("processing_activities")
+}
+
+// =============================================================================
+// Vendors — TPRM / SCRM
+// =============================================================================
+
+enum VendorType {
+  PROCESSOR
+  SUB_PROCESSOR
+  JOINT
+  OTHER
+}
+
+enum VendorCriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum VendorStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  OFFBOARDED
+}
+
+enum VendorRelationshipType {
+  SUB_PROCESSOR
+  AFFILIATE
+  RESELLER
+  OTHER
+}
+
+enum VendorAgreementStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  SUPERSEDED
+}
+
+enum VendorDiligenceOutcome {
+  APPROVED
+  CONDITIONAL
+  REJECTED
+  PENDING
+}
+
+enum ErasureChecklistStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  SKIPPED
+  FAILED
+}
+
+model Vendor {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  name              String
+  legalName         String?            @map("legal_name")
+  vendorType        VendorType         @default(PROCESSOR) @map("vendor_type")
+  countries         String[]           @default([])
+  services          String?
+  dataCategories    String[]           @default([]) @map("data_categories")
+  criticality       VendorCriticality  @default(MEDIUM)
+  status            VendorStatus       @default(DRAFT)
+  inherentRiskScore Int?               @map("inherent_risk_score")
+  residualRiskScore Int?               @map("residual_risk_score")
+  nextReviewAt      DateTime?          @map("next_review_at")
+  ownerUserId       String?            @map("owner_user_id") @db.Uuid
+  notes             String?
+
+  version Int @default(1)
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  owner        User?        @relation("VendorOwner", fields: [ownerUserId], references: [id])
+
+  processingActivities ProcessingActivity[]
+  agreements           VendorAgreement[]
+  reviews              VendorDiligenceReview[]
+  parentRelationships  VendorRelationship[] @relation("VendorParent")
+  childRelationships   VendorRelationship[] @relation("VendorChild")
+  erasureChecklistItems ErasureChecklistItem[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, criticality])
+  @@map("vendors")
+}
+
+model VendorRelationship {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  parentVendorId String @map("parent_vendor_id") @db.Uuid
+  childVendorId  String @map("child_vendor_id") @db.Uuid
+
+  relationshipType      VendorRelationshipType @map("relationship_type")
+  personalDataFlows     Boolean                @default(true) @map("personal_data_flows")
+  notificationRequired  Boolean                @default(true) @map("notification_required")
+  acknowledgedAt        DateTime?              @map("acknowledged_at")
+  notes                 String?
+
+  createdBy String? @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  parentVendor Vendor @relation("VendorParent", fields: [parentVendorId], references: [id])
+  childVendor  Vendor @relation("VendorChild", fields: [childVendorId], references: [id])
+
+  @@unique([parentVendorId, childVendorId])
+  @@index([organizationId])
+  @@map("vendor_relationships")
+}
+
+model VendorAgreement {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  vendorId       String @map("vendor_id") @db.Uuid
+
+  title                    String
+  versionLabel             String               @map("version_label")
+  status                   VendorAgreementStatus @default(DRAFT)
+  effectiveFrom            DateTime?            @map("effective_from")
+  expiresAt                DateTime?            @map("expires_at")
+  storageKey               String?              @map("storage_key")
+  evidenceFileId           String?              @map("evidence_file_id") @db.Uuid
+  allowsSubProcessors      Boolean              @default(false) @map("allows_sub_processors")
+  crossBorderAllowed       Boolean              @default(false) @map("cross_border_allowed")
+  breachNotifyHours        Int?                 @map("breach_notify_hours")
+  notes                    String?
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId])
+  @@index([vendorId])
+  @@index([vendorId, status])
+  @@map("vendor_agreements")
+}
+
+model VendorDiligenceReview {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  vendorId       String @map("vendor_id") @db.Uuid
+
+  reviewerUserId String?                 @map("reviewer_user_id") @db.Uuid
+  outcome        VendorDiligenceOutcome  @default(PENDING)
+  residualRisk   VendorCriticality?      @map("residual_risk")
+  dueAt          DateTime?               @map("due_at")
+  completedAt    DateTime?               @map("completed_at")
+  questionnaireJson Json?                @map("questionnaire_json")
+  notes          String?
+  evidenceFileIds String[]               @default([]) @map("evidence_file_ids")
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId])
+  @@index([vendorId])
+  @@map("vendor_diligence_reviews")
+}
+
+model ErasureChecklistItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId        String                 @map("organization_id") @db.Uuid
+  dataSubjectRequestId  String                 @map("data_subject_request_id") @db.Uuid
+  systemKey             String                 @map("system_key")
+  systemLabel           String                 @map("system_label")
+  vendorId              String?                @map("vendor_id") @db.Uuid
+  status                ErasureChecklistStatus @default(PENDING)
+  confirmedAt           DateTime?              @map("confirmed_at")
+  confirmedBy           String?                @map("confirmed_by") @db.Uuid
+  notes                 String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  dataSubjectRequest DataSubjectRequest @relation(fields: [dataSubjectRequestId], references: [id])
+  vendor             Vendor?            @relation(fields: [vendorId], references: [id])
+
+  @@unique([dataSubjectRequestId, systemKey])
+  @@index([organizationId])
+  @@index([dataSubjectRequestId])
+  @@map("erasure_checklist_items")
 }
 
 // =============================================================================
@@ -617,6 +833,14 @@ model DataSubjectRequest {
   dueAt    DateTime? @map("due_at")
   closedAt DateTime? @map("closed_at")
 
+  /// Soft-delete cooling-off end (Trace-parity). Null = not in cooling-off.
+  coolingOffUntil   DateTime? @map("cooling_off_until")
+  /// When true, skip cooling-off and allow immediate hard erase workflow.
+  immediateErase    Boolean   @default(false) @map("immediate_erase")
+  softDeletedAt     DateTime? @map("soft_deleted_at")
+  hardDeletedAt     DateTime? @map("hard_deleted_at")
+  erasureEvidenceJson Json?   @map("erasure_evidence_json")
+
   resolutionSummary String? @map("resolution_summary")
 
   version Int @default(1)
@@ -631,6 +855,8 @@ model DataSubjectRequest {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   assignee User? @relation("DataSubjectRequestAssignee", fields: [assignedTo], references: [id])
+
+  erasureChecklistItems ErasureChecklistItem[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -655,6 +881,7 @@ enum RuleCategory {
   CONSENT
   RETENTION
   RIGHTS
+  VENDOR
 }
 
 enum ValidationTriggerType {

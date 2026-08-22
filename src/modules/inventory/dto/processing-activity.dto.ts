@@ -11,6 +11,8 @@ export const createProcessingActivityDtoSchema = z.object({
 
   processorName: z.string().trim().max(255).optional(),
 
+  vendorId: z.string().uuid().nullable().optional(),
+
   legalBasis: z.string().trim().max(255).optional(),
 
   retentionRule: z.string().trim().max(255).optional(),

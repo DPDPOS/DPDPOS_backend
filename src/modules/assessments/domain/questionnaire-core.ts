@@ -6,6 +6,64 @@ import type { QuestionnaireQuestion } from "./questionnaire-types.js";
  */
 export const CORE_QUESTIONNAIRE: QuestionnaireQuestion[] = [
   {
+    code: "Q-AUDIT-NOTICE-PUBLIC",
+    stageId: "engineering_audit",
+    stageLabel: "Engineering audit",
+    stageOrder: 0,
+    label:
+      "Is a privacy notice published on public surfaces (website/app) stating why data is collected?",
+    helpText:
+      "Engineering audit — auditor’s eyes on public claims, not only an uploaded PDF.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-AUDIT-CONTACT-CHANNEL",
+    stageId: "engineering_audit",
+    stageLabel: "Engineering audit",
+    stageOrder: 0,
+    label:
+      "Is a clear contact / grievance channel published for data principal rights requests?",
+    helpText: "Visitors must know where to ask for access, correction, or erasure.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-AUDIT-HOSTING-REGION",
+    stageId: "engineering_audit",
+    stageLabel: "Engineering audit",
+    stageOrder: 0,
+    label: "Where is primary personal data hosted?",
+    helpText: "Maps India vs overseas hosting for transfer and localisation risk.",
+    valueType: "string",
+    options: ["INDIA_ONLY", "MULTI_REGION", "OUTSIDE_INDIA", "UNKNOWN"],
+    required: true,
+  },
+  {
+    code: "Q-AUDIT-INFORMAL-CHANNELS",
+    stageId: "engineering_audit",
+    stageLabel: "Engineering audit",
+    stageOrder: 0,
+    label:
+      "Is personal data shared via informal channels (WhatsApp, personal email, unmanaged sheets)?",
+    helpText:
+      "Informal channels are a common engineering-audit finding and raise processor/access risk.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-AUDIT-SYSTEMS-MAPPED",
+    stageId: "engineering_audit",
+    stageLabel: "Engineering audit",
+    stageOrder: 0,
+    label:
+      "Have you mapped internal systems that store personal data (CRM, apps, DBs, vendors)?",
+    helpText:
+      "System discovery is the first step before Trace-like continuous controls.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
     code: "Q-BIZ-MODEL",
     stageId: "org_profile",
     stageLabel: "Organisation profile",

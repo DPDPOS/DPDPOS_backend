@@ -16,6 +16,8 @@ import {
   dataSubjectRequestIdParamSchema,
   listDataSubjectRequestsQuerySchema,
   updateDataSubjectRequestDtoSchema,
+  startErasureDtoSchema,
+  confirmErasureItemDtoSchema,
 } from "../dto/data-subject-request.dto.js";
 
 export function createDataSubjectRequestRouter(): Router {
@@ -56,6 +58,44 @@ export function createDataSubjectRequestRouter(): Router {
     validateBody(updateDataSubjectRequestDtoSchema),
     (req, res, next) =>
       void dataSubjectRequestController.update(req, res, next),
+  );
+
+  router.post(
+    "/:id/erasure/start",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.update),
+    validateParams(dataSubjectRequestIdParamSchema),
+    validateBody(startErasureDtoSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.startErasure(req, res, next),
+  );
+
+  router.get(
+    "/:id/erasure",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.read),
+    validateParams(dataSubjectRequestIdParamSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.getErasure(req, res, next),
+  );
+
+  router.post(
+    "/:id/erasure/confirm",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.update),
+    validateParams(dataSubjectRequestIdParamSchema),
+    validateBody(confirmErasureItemDtoSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.confirmErasureItem(req, res, next),
+  );
+
+  router.post(
+    "/:id/erasure/complete",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.update),
+    validateParams(dataSubjectRequestIdParamSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.completeErasure(req, res, next),
   );
 
   return router;

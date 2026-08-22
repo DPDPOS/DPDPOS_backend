@@ -33,7 +33,13 @@ export type DomainEventName =
   | "AiSummaryReady"
   | "AiDraftReady"
   | "UserLoggedIn"
-  | "PasswordResetRequested";
+  | "PasswordResetRequested"
+  | "VendorCreated"
+  | "VendorRiskChanged"
+  | "DpaExpiring"
+  | "SubProcessorAdded"
+  | "ErasureSoftDeleted"
+  | "ErasureCompleted";
 
 export interface BaseDomainEvent<TPayload = Record<string, unknown>> {
   eventId: string;
@@ -81,4 +87,10 @@ export const DOMAIN_EVENTS = {
   AiDraftReady: "AiDraftReady",
   UserLoggedIn: "UserLoggedIn",
   PasswordResetRequested: "PasswordResetRequested",
+  VendorCreated: "VendorCreated",
+  VendorRiskChanged: "VendorRiskChanged",
+  DpaExpiring: "DpaExpiring",
+  SubProcessorAdded: "SubProcessorAdded",
+  ErasureSoftDeleted: "ErasureSoftDeleted",
+  ErasureCompleted: "ErasureCompleted",
 } as const satisfies Record<DomainEventName, DomainEventName>;

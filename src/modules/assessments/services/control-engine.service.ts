@@ -42,6 +42,8 @@ export type EvaluationSummary = {
     crossBorder: boolean | null;
     isSdf: boolean | null;
     hasVendors: boolean | null;
+    liveVendorCount?: number;
+    vendorsMissingDpa?: number;
   };
 };
 
@@ -118,7 +120,7 @@ function evaluateOne(
   }
 
   if (control.code === "DPDP-VENDOR-DPA" || control.code === "DPDP-VENDOR-INVENTORY") {
-    if (profile.hasVendors === false) {
+    if (profile.hasVendors === false && !profile.liveVendorCount) {
       return {
         controlCode: control.code,
         status: "NOT_APPLICABLE",
@@ -127,6 +129,39 @@ function evaluateOne(
         evidenceRefs: [{ kind: "questionnaire", ref: "Q-VENDORS=false" }],
       };
     }
+  }
+
+  // Live vendor registry overrides thin questionnaire-only PASS for DPA/inventory.
+  if (
+    control.code === "DPDP-VENDOR-DPA" &&
+    profile.liveVendorCount &&
+    profile.liveVendorCount > 0 &&
+    (profile.vendorsMissingDpa ?? 0) > 0
+  ) {
+    return {
+      controlCode: control.code,
+      status: "FAIL",
+      severity: control.severity,
+      reasoning: `${profile.vendorsMissingDpa} ACTIVE vendor(s) in the registry lack an ACTIVE DPA.`,
+      evidenceRefs: [
+        { kind: "vendor_registry", ref: `missing_dpa=${profile.vendorsMissingDpa}` },
+      ],
+    };
+  }
+
+  if (
+    control.code === "DPDP-VENDOR-INVENTORY" &&
+    profile.hasVendors === true &&
+    (profile.liveVendorCount ?? 0) === 0
+  ) {
+    return {
+      controlCode: control.code,
+      status: "FAIL",
+      severity: control.severity,
+      reasoning:
+        "Questionnaire reports vendors, but the vendor registry has no ACTIVE/DRAFT records.",
+      evidenceRefs: [{ kind: "vendor_registry", ref: "count=0" }],
+    };
   }
 
   // Children processing raises the bar for consent/notice controls.
@@ -238,6 +273,7 @@ export function evaluateControls(input: {
   answers: AnswerLite[];
   documentTexts: string[];
   documentTypes?: string[];
+  vendorLive?: { liveVendorCount: number; vendorsMissingDpa: number };
 }): {
   score: number;
   results: ControlEvalResult[];
@@ -250,6 +286,8 @@ export function evaluateControls(input: {
     crossBorder: answerFor(input.answers, "Q-CROSS-BORDER"),
     isSdf: answerFor(input.answers, "Q-SDF"),
     hasVendors: answerFor(input.answers, "Q-VENDORS"),
+    liveVendorCount: input.vendorLive?.liveVendorCount,
+    vendorsMissingDpa: input.vendorLive?.vendorsMissingDpa,
   };
 
   const results = ASSESSMENT_CONTROL_REGISTRY.map((c) =>

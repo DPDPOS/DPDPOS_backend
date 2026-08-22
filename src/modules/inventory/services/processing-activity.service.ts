@@ -11,6 +11,7 @@ import {
   type CreateProcessingActivityData,
   type UpdateProcessingActivityData,
 } from "../repositories/processing-activity.repository.js";
+import { VendorRepository } from "../../vendors/repositories/vendor.repository.js";
 
 import {
   toProcessingActivityResponse,
@@ -21,7 +22,17 @@ export class ProcessingActivityService {
   constructor(
     private readonly repository = new ProcessingActivityRepository(),
     private readonly dataAssetRepository = new DataAssetRepository(),
+    private readonly vendorRepository = new VendorRepository(),
   ) {}
+
+  private async assertVendor(
+    organizationId: string,
+    vendorId: string | null | undefined,
+  ) {
+    if (!vendorId) return;
+    const vendor = await this.vendorRepository.findById(organizationId, vendorId);
+    if (!vendor) throw new NotFoundError("Vendor not found");
+  }
 
   async create(
     ctx: RequestContext,
@@ -37,6 +48,8 @@ export class ProcessingActivityService {
     if (!asset) {
       throw new NotFoundError("Data Asset not found");
     }
+
+    await this.assertVendor(ctx.organizationId, input.vendorId);
 
     return withTransaction(async (tx) => {
       const activity = await this.repository.create(tx, ctx, input);
@@ -109,6 +122,10 @@ export class ProcessingActivityService {
       if (!asset) {
         throw new NotFoundError("Data Asset not found");
       }
+    }
+
+    if (input.vendorId !== undefined) {
+      await this.assertVendor(ctx.organizationId, input.vendorId);
     }
 
     return withTransaction(async (tx) => {

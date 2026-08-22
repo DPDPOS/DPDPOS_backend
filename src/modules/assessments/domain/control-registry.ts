@@ -114,7 +114,7 @@ export const ASSESSMENT_CONTROL_REGISTRY: AssessmentControlDef[] = [
     category: "Vendors",
     title: "Vendor / processor inventory",
     severity: "HIGH",
-    questionCodes: ["Q-VENDORS"],
+    questionCodes: ["Q-VENDORS", "Q-VENDOR-INVENTORY"],
     findingTypes: ["vendor_reference"],
     docKeywords: ["vendor", "processor", "subprocessor"],
   },

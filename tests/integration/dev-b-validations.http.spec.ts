@@ -104,7 +104,7 @@ describe("Dev B validation engine end-to-end", () => {
       .set("Authorization", bearer())
       .expect(200);
 
-    expect(rules.body.data.length).toBe(5);
+    expect(rules.body.data.length).toBe(7);
     const codes = rules.body.data.map((r: { ruleCode: string }) => r.ruleCode);
     expect(codes).toContain("notice-present");
     expect(codes).toContain("consent-present");
@@ -132,7 +132,7 @@ describe("Dev B validation engine end-to-end", () => {
     expect(detail.body.data.status).toBe("COMPLETED");
     expect(detail.body.data.finishedAt).not.toBeNull();
     expect(detail.body.data.durationMs).not.toBeNull();
-    expect(detail.body.data.results.length).toBe(5);
+    expect(detail.body.data.results.length).toBe(7);
 
     const noticeResult = detail.body.data.results.find(
       (r: { ruleCode: string }) => r.ruleCode === "notice-present",

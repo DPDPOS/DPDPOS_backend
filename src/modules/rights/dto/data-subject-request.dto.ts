@@ -25,6 +25,11 @@ export const createDataSubjectRequestDtoSchema = z.object({
   requesterReference: z.string().trim().min(1).max(500),
 
   assignedTo: z.string().uuid().optional(),
+
+  /** For ERASURE: skip cooling-off and allow immediate hard-erase path. */
+  immediateErase: z.boolean().optional(),
+
+  coolingOffDays: z.number().int().min(1).max(30).optional(),
 });
 
 export type CreateDataSubjectRequestDto = z.infer<
@@ -69,3 +74,14 @@ export const listDataSubjectRequestsQuerySchema = z.object({
 export type ListDataSubjectRequestsQuery = z.infer<
   typeof listDataSubjectRequestsQuerySchema
 >;
+
+export const startErasureDtoSchema = z.object({
+  immediate: z.boolean().optional(),
+  coolingOffDays: z.number().int().min(1).max(30).optional(),
+});
+
+export const confirmErasureItemDtoSchema = z.object({
+  systemKey: z.string().trim().min(1).max(200),
+  status: z.enum(["DONE", "SKIPPED", "FAILED"]),
+  notes: z.string().trim().max(2000).optional(),
+});

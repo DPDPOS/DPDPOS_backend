@@ -50,11 +50,16 @@ export async function deleteTestOrganizations(
     await prisma.validationRun.deleteMany({ where: orgWhere });
     await prisma.validationRule.deleteMany({ where: orgWhere });
 
-    // Rights / consent / inventory
+    // Rights / consent / inventory / vendors (TPRM)
+    await prisma.erasureChecklistItem.deleteMany({ where: orgWhere });
     await prisma.dataSubjectRequest.deleteMany({ where: orgWhere });
     await prisma.consentRecord.deleteMany({ where: orgWhere });
     await prisma.notice.deleteMany({ where: orgWhere });
     await prisma.processingActivity.deleteMany({ where: orgWhere });
+    await prisma.vendorRelationship.deleteMany({ where: orgWhere });
+    await prisma.vendorAgreement.deleteMany({ where: orgWhere });
+    await prisma.vendorDiligenceReview.deleteMany({ where: orgWhere });
+    await prisma.vendor.deleteMany({ where: orgWhere });
     await prisma.dataAsset.deleteMany({ where: orgWhere });
 
     // Programme

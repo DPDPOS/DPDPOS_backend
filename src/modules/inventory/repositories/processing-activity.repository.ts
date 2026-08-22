@@ -19,6 +19,7 @@ export type CreateProcessingActivityData = {
   sourceSystem?: string;
   recipientType?: string;
   processorName?: string;
+  vendorId?: string | null;
   legalBasis?: string;
   retentionRule?: string;
   notes?: string;
@@ -32,6 +33,7 @@ export type UpdateProcessingActivityData = {
   sourceSystem?: string | null;
   recipientType?: string | null;
   processorName?: string | null;
+  vendorId?: string | null;
   legalBasis?: string | null;
   retentionRule?: string | null;
   notes?: string | null;
@@ -45,6 +47,7 @@ function mapProcessingActivity(
 
     organizationId: row.organizationId,
     dataAssetId: row.dataAssetId,
+    vendorId: row.vendorId,
 
     purpose: row.purpose,
 
@@ -121,6 +124,7 @@ export class ProcessingActivityRepository extends BaseRepository {
         sourceSystem: data.sourceSystem,
         recipientType: data.recipientType,
         processorName: data.processorName,
+        vendorId: data.vendorId ?? undefined,
         legalBasis: data.legalBasis,
         retentionRule: data.retentionRule,
         notes: data.notes,
@@ -160,6 +164,8 @@ export class ProcessingActivityRepository extends BaseRepository {
         ...(data.processorName !== undefined
           ? { processorName: data.processorName }
           : {}),
+
+        ...(data.vendorId !== undefined ? { vendorId: data.vendorId } : {}),
 
         ...(data.legalBasis !== undefined
           ? { legalBasis: data.legalBasis }

@@ -27,6 +27,9 @@ export function createAnalyticsRouter(): Router {
 
   router.get("/validations", authenticate, requirePermission(analyticsPermissions.read),
     (req, res, next) => void analyticsController.getValidationSummary(req, res, next));
+
+  router.get("/vendor-risk", authenticate, requirePermission(analyticsPermissions.read),
+    (req, res, next) => void analyticsController.getVendorRisk(req, res, next));
     
   return router;
 }

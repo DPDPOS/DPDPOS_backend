@@ -80,6 +80,13 @@ export class AnalyticsService {
       consent
     };
   }
+
+  async getVendorRisk(ctx: RequestContext) {
+    const { vendorService } = await import(
+      "../../vendors/services/vendor.service.js"
+    );
+    return vendorService.analyticsSummary(ctx);
+  }
 }
 
 export const analyticsService = new AnalyticsService();

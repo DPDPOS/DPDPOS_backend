@@ -58,6 +58,13 @@ export class AnalyticsController {
       sendSuccess(res, await analyticsService.getValidationSummary(ctx));
     } catch (err) { next(err); }
   }
+
+  async getVendorRisk(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const ctx = getRequestContext(req);
+      sendSuccess(res, await analyticsService.getVendorRisk(ctx));
+    } catch (err) { next(err); }
+  }
 }
 
 export const analyticsController = new AnalyticsController();

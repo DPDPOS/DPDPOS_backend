@@ -5,6 +5,10 @@ import { ConsentPresentRule } from "../rules/consent-present.rule.js";
 import { ConsentWithdrawnCorrectlyRule } from "../rules/consent-withdrawn-correctly.rule.js";
 import { RetentionMetadataSetRule } from "../rules/retention-metadata-set.rule.js";
 import { RequestRespondedWithinSlaRule } from "../rules/request-responded-within-sla.rule.js";
+import {
+  VendorDpaPresentRule,
+  VendorReviewCurrentRule,
+} from "../rules/vendor-rules.js";
 
 const EVALUATORS: ValidationRuleEvaluator[] = [
   new NoticePresentRule(),
@@ -12,6 +16,8 @@ const EVALUATORS: ValidationRuleEvaluator[] = [
   new ConsentWithdrawnCorrectlyRule(),
   new RetentionMetadataSetRule(),
   new RequestRespondedWithinSlaRule(),
+  new VendorDpaPresentRule(),
+  new VendorReviewCurrentRule(),
 ];
 
 const BY_CODE = new Map(
