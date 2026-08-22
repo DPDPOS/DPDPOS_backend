@@ -7,7 +7,7 @@ import { signAccessToken } from "../../auth/utils/jwt.js";
 import { ALL_PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
 
-function authHeader(organizationId: string, userId = randomUUID()): string {
+function authHeader(organizationId: string, userId: string = randomUUID()): string {
   const token = signAccessToken({
     actorUserId: userId,
     organizationId,
@@ -127,7 +127,12 @@ describe("AI context in CLI evidence batch submission", () => {
       .set("Authorization", auth)
       .send({
         answers: [
-          { questionCode: "Q-BIZ-MODEL", value: "B2C" },
+          { questionCode: "Q-AUDIT-NOTICE-PUBLIC", value: true },
+        { questionCode: "Q-AUDIT-CONTACT-CHANNEL", value: true },
+        { questionCode: "Q-AUDIT-HOSTING-REGION", value: "INDIA_ONLY" },
+        { questionCode: "Q-AUDIT-INFORMAL-CHANNELS", value: false },
+        { questionCode: "Q-AUDIT-SYSTEMS-MAPPED", value: true },
+        { questionCode: "Q-BIZ-MODEL", value: "B2C" },
           { questionCode: "Q-DATA-VOLUME", value: "10K_TO_100K" },
           { questionCode: "Q-DATA-CATEGORIES", value: "CONTACT" },
           { questionCode: "Q-CHILDREN-DATA", value: false },
@@ -609,6 +614,11 @@ async function setupAssessment(
     .set("Authorization", auth)
     .send({
       answers: [
+        { questionCode: "Q-AUDIT-NOTICE-PUBLIC", value: true },
+        { questionCode: "Q-AUDIT-CONTACT-CHANNEL", value: true },
+        { questionCode: "Q-AUDIT-HOSTING-REGION", value: "INDIA_ONLY" },
+        { questionCode: "Q-AUDIT-INFORMAL-CHANNELS", value: false },
+        { questionCode: "Q-AUDIT-SYSTEMS-MAPPED", value: true },
         { questionCode: "Q-BIZ-MODEL", value: "B2C" },
         { questionCode: "Q-DATA-VOLUME", value: "10K_TO_100K" },
         { questionCode: "Q-DATA-CATEGORIES", value: "CONTACT" },

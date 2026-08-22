@@ -57,11 +57,15 @@ const envSchema = z.object({
   /**
    * Master switch for login MFA (email OTP + TOTP challenges) and privileged
    * requireMfa middleware. MFA code paths remain; set "false" to skip them.
+   * Vitest always enables MFA so auth HTTP specs exercise the challenge path.
    */
   AUTH_MFA_ENABLED: z
     .string()
     .optional()
-    .transform((value) => value !== "false"),
+    .transform((value) => {
+      if (process.env.VITEST !== undefined) return true;
+      return value !== "false";
+    }),
 }).superRefine((value, ctx) => {
   const provider = value.EMAIL_PROVIDER ?? (value.NODE_ENV === "production" ? "SES_SMTP" : "MAILHOG");
   if (value.NODE_ENV === "production" && provider !== "SES_SMTP") {

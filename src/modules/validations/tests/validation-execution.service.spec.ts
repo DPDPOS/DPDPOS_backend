@@ -291,6 +291,7 @@ describe("Validation engine (VLD-003)", () => {
 
     const rule = await rulesService.create(ctx, {
       ruleCode: "notice-present",
+      title: "Notice present",
     });
     createdRuleIds.push(rule.id);
 
@@ -301,6 +302,7 @@ describe("Validation engine (VLD-003)", () => {
     await expect(
       rulesService.create(ctx, {
         ruleCode: "no-such-evaluator",
+        title: "Unknown rule",
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
@@ -311,6 +313,7 @@ describe("Validation engine (VLD-003)", () => {
 
     const rule = await rulesService.create(ctx, {
       ruleCode: "retention-metadata-set",
+      title: "Retention metadata set",
     });
     createdRuleIds.push(rule.id);
 
@@ -351,7 +354,7 @@ describe("Validation engine (VLD-003)", () => {
     // Sweep only creates + enqueues; a shared Redis worker (local or remote)
     // may claim the job before this read, so status is not stuck at PENDING.
     expect(["PENDING", "RUNNING", "COMPLETED", "PARTIAL"]).toContain(
-      scheduled[0].status,
+      scheduled[0]?.status,
     );
     scheduled.forEach((s) => createdRunIds.push(s.id));
   });
