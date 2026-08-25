@@ -13,6 +13,11 @@ import { hashToken } from "../../auth/utils/token-crypto.js";
 import { appConfig } from "../../../config/app.config.js";
 import { getS3Client } from "../../../infrastructure/storage/s3-adapter.js";
 import { s3Config } from "../../../config/s3.config.js";
+import { logger } from "../../../infrastructure/logging/logger.js";
+import { OpenAICompatibleAdapter } from "../../../infrastructure/ai-provider/openai-compatible.adapter.js";
+import { buildClassificationPrompt } from "../../ai/domain/prompt-builders.js";
+import { sanitizeAiContext } from "../../ai/domain/context-builders/sanitize-ai-context.js";
+import { env } from "../../../config/env.js";
 import { appendAssessmentAudit } from "./assessment-audit.service.js";
 import { evaluateControls } from "./control-engine.service.js";
 import type {
@@ -52,6 +57,78 @@ async function organizationIndustry(organizationId: string): Promise<string | nu
     select: { industry: true },
   });
   return org?.industry ?? null;
+}
+
+/**
+ * Valid classification values returned by the AI provider.
+ */
+const VALID_CLASSIFICATIONS = new Set(["positive_evidence", "reference_only", "negative_evidence"]);
+
+/**
+ * Server-side AI classification of CLI evidence findings.
+ * Calls Groq (via OpenAI-compatible adapter) to classify each finding.
+ * Returns a validated aiContext object or throws on failure.
+ */
+async function classifyFindingsWithAI(
+  findings: Array<{
+    sourceType: string;
+    location: string;
+    findingType: string;
+    excerpt?: string;
+    confidence: number;
+    controlCandidates?: string[];
+  }>,
+): Promise<Record<string, unknown>> {
+  const llm = new OpenAICompatibleAdapter();
+  const sanitized = sanitizeAiContext(findings) as typeof findings;
+  const { system, prompt } = buildClassificationPrompt(sanitized);
+
+  const result = await llm.complete({ prompt, system });
+
+  // Parse and validate the AI response defensively.
+  let parsed: unknown;
+  try {
+    // Strip markdown fences if present
+    const cleaned = result.text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error("AI returned invalid JSON");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("AI response is not an array");
+  }
+
+  // Build a lookup of valid input finding keys.
+  const validKeys = new Set(findings.map((f) => `${f.location}|${f.findingType}`));
+
+  const classifications = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const { location, findingType, classification, reasoning, confidence } = item as Record<string, unknown>;
+
+    // Validate required fields exist
+    if (typeof location !== "string" || typeof findingType !== "string") continue;
+    if (typeof classification !== "string" || !VALID_CLASSIFICATIONS.has(classification)) continue;
+    if (typeof reasoning !== "string" || reasoning.length === 0) continue;
+    if (typeof confidence !== "number" || confidence < 0 || confidence > 1) continue;
+
+    // Reject fabricated locations/types: only accept results matching actual input findings.
+    if (!validKeys.has(`${location}|${findingType}`)) continue;
+
+    classifications.push({ location, findingType, classification, reasoning, confidence });
+  }
+
+  if (classifications.length === 0) {
+    throw new Error("AI produced no valid classifications matching input findings");
+  }
+
+  return {
+    classifiedAt: new Date().toISOString(),
+    provider: "groq",
+    model: env.AI_MODEL ?? "unknown",
+    classifications,
+  };
 }
 
 export class AssessmentService {
@@ -519,6 +596,7 @@ export class AssessmentService {
       throw new ValidationError("Scan job belongs to a previous assessment version");
     }
 
+    // 1. Store findings and complete the scan (atomic, deterministic).
     const result = await prisma.$transaction(async (tx) => {
       await tx.cliFinding.createMany({
         data: dto.findings.map((f) => ({
@@ -541,8 +619,6 @@ export class AssessmentService {
           status: "COMPLETED",
           findingsCount: dto.findings.length,
           finishedAt: new Date(),
-          // Informational only — does NOT affect deterministic control evaluation.
-          aiContext: dto.aiContext as Prisma.InputJsonValue | undefined,
         },
       });
       await tx.assessment.update({
@@ -562,11 +638,29 @@ export class AssessmentService {
       return updated;
     });
 
+    // 2. Server-side AI classification (outside transaction, best-effort).
+    //    AI failure MUST NOT prevent evidence submission from succeeding.
+    let aiClassificationStatus: "COMPLETED" | "FAILED" | "SKIPPED" = "SKIPPED";
+    if (dto.requestAiClassification === true) {
+      try {
+        const aiContext = await classifyFindingsWithAI(dto.findings);
+        await prisma.scanJob.update({
+          where: { id: job.id },
+          data: { aiContext: aiContext as Prisma.InputJsonValue },
+        });
+        aiClassificationStatus = "COMPLETED";
+      } catch (err) {
+        logger.warn({ err, scanJobId: job.id }, "ai.classification_failed_evidence_stored")
+        aiClassificationStatus = "FAILED";
+      }
+    }
+
     return {
       scanJobId: result.id,
       findingsAccepted: dto.findings.length,
       status: result.status,
       versionNumber: assessment.currentVersion,
+      aiClassificationStatus,
     };
   }
 
