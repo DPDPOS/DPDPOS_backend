@@ -28,6 +28,7 @@
     "demo": "bash scripts/run-poc-demo.sh --keep-alive",
     "demo:ui": "echo Open http://127.0.0.1:3000/demo (API must be running)",
     "prisma:studio": "prisma studio",
+    "postinstall": "prisma generate",
     "test:spine": "vitest run tests/integration/compliance-spine.http.spec.ts"
   },
   "dependencies": {
