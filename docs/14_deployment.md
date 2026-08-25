@@ -193,9 +193,11 @@ API_PUBLIC_URL=https://dpdpos-api.onrender.com
 FRONTEND_PUBLIC_URL=https://dpdpos.vercel.app
 
 # Optional AI — leave blank for demos
+# Server-side Groq API for CLI evidence classification (dpdp-cli --ai)
+# The CLI NEVER receives this key; classification happens server-side.
 AI_API_KEY=
-AI_BASE_URL=
-AI_MODEL=
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=allam-2-7b
 AI_MAX_TOKENS=1024
 ```
 

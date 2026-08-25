@@ -114,7 +114,12 @@ export const aiContextSchema = z.object({
 export const evidenceBatchSchema = z.object({
   scanJobId: z.string().uuid(),
   findings: z.array(findingSchema).min(1).max(5000),
-  aiContext: aiContextSchema.optional(),
+  /**
+   * When true, the backend will call the server-side AI provider (Groq)
+   * to classify each finding and persist the result as ScanJob.aiContext.
+   * The CLI must never send aiContext directly.
+   */
+  requestAiClassification: z.boolean().optional(),
 });
 export type EvidenceBatchDto = z.infer<typeof evidenceBatchSchema>;
 
