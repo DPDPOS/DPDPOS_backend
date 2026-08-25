@@ -197,7 +197,7 @@ FRONTEND_PUBLIC_URL=https://dpdpos.vercel.app
 # The CLI NEVER receives this key; classification happens server-side.
 AI_API_KEY=
 AI_BASE_URL=https://api.groq.com/openai/v1
-AI_MODEL=allam-2-7b
+AI_MODEL=llama-3.1-8b-instant
 AI_MAX_TOKENS=1024
 ```
 

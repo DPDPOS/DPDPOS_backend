@@ -300,9 +300,9 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
   });
 
   // =========================================================================
-  // 4. requestAiClassification=true + AI failure → findings stored, aiContext null
+  // 4. requestAiClassification=true + AI failure → findings stored, failure marker
   // =========================================================================
-  it("4. requestAiClassification=true + AI failure → findings stored, aiContext null", async () => {
+  it("4. requestAiClassification=true + AI failure → findings stored, failure marker", async () => {
     mockAiResponse = () => {
       throw new Error("LLM provider returned HTTP 503");
     };
@@ -324,13 +324,22 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
     expect(batch.body.data.aiClassificationStatus).toBe("FAILED");
 
     const job = await prisma.scanJob.findUnique({ where: { id: scanJobId } });
-    expect(job!.aiContext).toBeNull();
+    const stored = job!.aiContext as Record<string, unknown>;
+    expect(stored).not.toBeNull();
+    expect(stored.status).toBe("FAILED");
+    expect(stored.classifications).toEqual([]);
+
+    const getRes = await request(app)
+      .get(`/api/v1/assessments/${assessmentId}/cli/scans/${scanJobId}`)
+      .set("Authorization", `Bearer ${cliToken}`)
+      .expect(200);
+    expect(getRes.body.data.aiClassificationStatus).toBe("FAILED");
   });
 
   // =========================================================================
-  // 5. Malformed AI JSON → scan succeeds, aiContext null
+  // 5. Malformed AI JSON → scan succeeds, failure marker
   // =========================================================================
-  it("5. malformed AI JSON → scan succeeds, aiContext null", async () => {
+  it("5. malformed AI JSON → scan succeeds, failure marker", async () => {
     mockAiResponse = () => ({
       text: "This is not JSON at all",
       tokensIn: 50,
@@ -353,7 +362,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
     expect(batch.body.data.aiClassificationStatus).toBe("FAILED");
 
     const job = await prisma.scanJob.findUnique({ where: { id: scanJobId } });
-    expect(job!.aiContext).toBeNull();
+    expect((job!.aiContext as Record<string, unknown>).status).toBe("FAILED");
   });
 
   // =========================================================================
@@ -730,7 +739,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
   });
 
   // =========================================================================
-  // 13. getScan returns aiContext after successful classification
+  // 13. getScan returns aiContext + aiClassificationStatus after success
   // =========================================================================
   it("13. getScan returns aiContext after successful classification", async () => {
     mockAiResponse = () => ({
@@ -759,12 +768,13 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
     expect(getRes.body.data.aiContext).not.toBeNull();
     expect(getRes.body.data.aiContext.provider).toBe("groq");
     expect(Array.isArray(getRes.body.data.aiContext.classifications)).toBe(true);
+    expect(getRes.body.data.aiClassificationStatus).toBe("COMPLETED");
   });
 
   // =========================================================================
-  // 14. AI returns all fabricated results → no valid classifications → aiContext null
+  // 14. AI returns all fabricated results → no valid classifications → FAILED marker
   // =========================================================================
-  it("14. AI returns all fabricated results → aiContext null (no valid classifications)", async () => {
+  it("14. AI returns all fabricated results → FAILED marker (no valid classifications)", async () => {
     mockAiResponse = () => ({
       text: JSON.stringify([
         {
@@ -796,13 +806,13 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
     expect(batch.body.data.aiClassificationStatus).toBe("FAILED");
 
     const job = await prisma.scanJob.findUnique({ where: { id: scanJobId } });
-    expect(job!.aiContext).toBeNull();
+    expect((job!.aiContext as Record<string, unknown>).status).toBe("FAILED");
   });
 
   // =========================================================================
-  // 15. AI returns empty array → aiContext null
+  // 15. AI returns empty array → FAILED marker
   // =========================================================================
-  it("15. AI returns empty array → aiContext null", async () => {
+  it("15. AI returns empty array → FAILED marker", async () => {
     mockAiResponse = () => ({
       text: JSON.stringify([]),
       tokensIn: 50,
@@ -825,7 +835,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
     expect(batch.body.data.aiClassificationStatus).toBe("FAILED");
 
     const job = await prisma.scanJob.findUnique({ where: { id: scanJobId } });
-    expect(job!.aiContext).toBeNull();
+    expect((job!.aiContext as Record<string, unknown>).status).toBe("FAILED");
   });
 });
 

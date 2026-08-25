@@ -3,7 +3,9 @@ import { ServiceUnavailableError } from "../../shared/errors/app-error.js";
 import { env } from "../../config/env.js";
 
 /**
- * OpenAI-compatible adapter stub — wired when AI module is implemented (Dev C).
+ * OpenAI-compatible chat completions adapter (Groq, OpenAI, etc.).
+ * Used by assessment CLI evidence classification and the /ai assistance module.
+ * Credentials come only from server env (AI_API_KEY) — never from the CLI.
  */
 export class OpenAICompatibleAdapter implements LLMProvider {
   async complete(input: {

@@ -89,8 +89,10 @@ export const findingSchema = z.object({
 });
 
 /**
- * Optional AI enrichment context from dpdp-cli --ai.
+ * Optional AI enrichment context produced server-side when the CLI sends
+ * `requestAiClassification: true` (`dpdp scan --ai`).
  * Informational only — does NOT affect deterministic control evaluation.
+ * The CLI must never send aiContext or AI credentials.
  */
 export const aiClassificationSchema = z.object({
   location: z.string().min(1).max(500),

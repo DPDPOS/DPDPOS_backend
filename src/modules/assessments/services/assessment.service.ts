@@ -64,6 +64,36 @@ async function organizationIndustry(organizationId: string): Promise<string | nu
  */
 const VALID_CLASSIFICATIONS = new Set(["positive_evidence", "reference_only", "negative_evidence"]);
 
+type AiClassificationStatus = "COMPLETED" | "FAILED" | "SKIPPED";
+
+/** Derive CLI-facing AI status from persisted ScanJob.aiContext (never from client input). */
+function deriveAiClassificationStatus(
+  aiContext: unknown,
+): AiClassificationStatus | undefined {
+  if (!aiContext || typeof aiContext !== "object") return undefined;
+  const ctx = aiContext as Record<string, unknown>;
+  if (ctx.status === "FAILED") return "FAILED";
+  if (Array.isArray(ctx.classifications) && ctx.classifications.length > 0) {
+    return "COMPLETED";
+  }
+  return undefined;
+}
+
+/** Best-effort JSON array extraction from LLM text (fences / leading prose). */
+function parseAiJsonArray(text: string): unknown {
+  const cleaned = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+    if (start >= 0 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    }
+    throw new Error("AI returned invalid JSON");
+  }
+}
+
 /**
  * Server-side AI classification of CLI evidence findings.
  * Calls Groq (via OpenAI-compatible adapter) to classify each finding.
@@ -85,15 +115,7 @@ async function classifyFindingsWithAI(
 
   const result = await llm.complete({ prompt, system });
 
-  // Parse and validate the AI response defensively.
-  let parsed: unknown;
-  try {
-    // Strip markdown fences if present
-    const cleaned = result.text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error("AI returned invalid JSON");
-  }
+  const parsed = parseAiJsonArray(result.text);
 
   if (!Array.isArray(parsed)) {
     throw new Error("AI response is not an array");
@@ -127,6 +149,7 @@ async function classifyFindingsWithAI(
     classifiedAt: new Date().toISOString(),
     provider: "groq",
     model: env.AI_MODEL ?? "unknown",
+    status: "COMPLETED",
     classifications,
   };
 }
@@ -572,7 +595,10 @@ export class AssessmentService {
       },
     });
     if (!job) throw new NotFoundError("Scan job not found");
-    return job;
+    const aiClassificationStatus = deriveAiClassificationStatus(job.aiContext);
+    return aiClassificationStatus
+      ? { ...job, aiClassificationStatus }
+      : job;
   }
 
   async submitEvidenceBatch(
@@ -640,7 +666,8 @@ export class AssessmentService {
 
     // 2. Server-side AI classification (outside transaction, best-effort).
     //    AI failure MUST NOT prevent evidence submission from succeeding.
-    let aiClassificationStatus: "COMPLETED" | "FAILED" | "SKIPPED" = "SKIPPED";
+    //    Credentials stay on the server — the CLI never receives AI_API_KEY.
+    let aiClassificationStatus: AiClassificationStatus = "SKIPPED";
     if (dto.requestAiClassification === true) {
       try {
         const aiContext = await classifyFindingsWithAI(dto.findings);
@@ -650,8 +677,31 @@ export class AssessmentService {
         });
         aiClassificationStatus = "COMPLETED";
       } catch (err) {
-        logger.warn({ err, scanJobId: job.id }, "ai.classification_failed_evidence_stored")
+        logger.warn({ err, scanJobId: job.id }, "ai.classification_failed_evidence_stored");
         aiClassificationStatus = "FAILED";
+        // Persist a failure marker so `dpdp status` can surface FAILED (vs never requested).
+        await prisma.scanJob
+          .update({
+            where: { id: job.id },
+            data: {
+              aiContext: {
+                status: "FAILED",
+                classifiedAt: new Date().toISOString(),
+                provider: "groq",
+                model: env.AI_MODEL ?? "unknown",
+                error: err instanceof Error
+                  ? err.message.replace(/\bAI_API_KEY\b/g, "AI credentials")
+                  : "AI classification failed",
+                classifications: [],
+              } as Prisma.InputJsonValue,
+            },
+          })
+          .catch((persistErr) => {
+            logger.warn(
+              { err: persistErr, scanJobId: job.id },
+              "ai.classification_failure_marker_persist_failed",
+            );
+          });
       }
     }
 
