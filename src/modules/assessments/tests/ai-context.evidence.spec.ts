@@ -501,7 +501,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
   // 9. PII sanitization → sensitive values do not reach adapter
   // =========================================================================
   it("9. PII sanitization → sensitive keys stripped before AI call", async () => {
-    let capturedPrompt = "";
+    const capturedPrompt = "";
     mockAiResponse = () => ({
       text: JSON.stringify([]), // empty but valid
       tokensIn: 0,
