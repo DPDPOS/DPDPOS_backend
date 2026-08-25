@@ -315,9 +315,11 @@ export class VendorService {
     let missingDpa = 0;
     let highRisk = 0;
     let reviewsOverdue = 0;
+    let dpaExpiring = 0;
     for (const v of active) {
       const score = await this.buildScorecard(ctx.organizationId, v.id);
       if (score.openRiskFlags.includes("missing_dpa")) missingDpa += 1;
+      if (score.openRiskFlags.includes("dpa_expiring")) dpaExpiring += 1;
       if (score.residualRiskScore >= 65) highRisk += 1;
       if (score.openRiskFlags.includes("review_overdue")) reviewsOverdue += 1;
     }
@@ -327,6 +329,7 @@ export class VendorService {
       missingDpa,
       highRisk,
       reviewsOverdue,
+      dpaExpiring,
     };
   }
 

@@ -1,6 +1,6 @@
 # Vendor TPRM / SCRM + Trace alignment
 
-Status: **IN PROGRESS** (schema + APIs shipping with this workstream)  
+Status: **IMPLEMENTED** (TPRM/SCRM APIs + FE + Trace erasure/locator + CLI vendor autoscan)  
 Goal: First-class third-party risk (TPRM) and supply-chain risk (SCRM), framed by the 7UNIT model: **engineering audit first**, then **Trace-like operational evidence**.
 
 ---

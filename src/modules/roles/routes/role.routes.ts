@@ -27,6 +27,13 @@ export function createRolesRouter(): Router {
   );
 
   router.post(
+    "/sync-system-presets",
+    authenticate,
+    requirePermission(rolePermissions.updatePermissions),
+    (req, res, next) => void roleController.syncSystemPresets(req, res, next),
+  );
+
+  router.post(
     "/",
     authenticate,
     requirePermission(rolePermissions.create),

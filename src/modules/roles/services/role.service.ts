@@ -1,3 +1,4 @@
+import { SYSTEM_ROLE_PRESETS } from "../../../shared/constants/permissions.js";
 import {
   ConflictError,
   NotFoundError,
@@ -124,6 +125,67 @@ export class RoleService {
 
       return toRoleResponse(role);
     });
+  }
+
+  /**
+   * Re-apply SYSTEM_ROLE_PRESETS onto this org's system roles so newly added
+   * catalog permissions (e.g. vendor:*) appear without recreating the org.
+   */
+  async syncSystemPresets(ctx: RequestContext): Promise<{
+    updated: Array<{ name: string; permissionCount: number }>;
+  }> {
+    const updated: Array<{ name: string; permissionCount: number }> = [];
+    const touchedUserIds = new Set<string>();
+
+    await withTransaction(async (tx) => {
+      for (const [name, permissions] of Object.entries(SYSTEM_ROLE_PRESETS)) {
+        const catalogued = assertPermissionsInCatalog([...permissions]);
+        const result = await tx.role.updateMany({
+          where: {
+            organizationId: ctx.organizationId,
+            name,
+            isSystemRole: true,
+            deletedAt: null,
+          },
+          data: {
+            permissions: catalogued,
+            updatedBy: ctx.actorUserId,
+          },
+        });
+        if (result.count > 0) {
+          updated.push({ name, permissionCount: catalogued.length });
+          const role = await this.repo.findByName({
+            organizationId: ctx.organizationId,
+            name,
+          });
+          if (role) {
+            const userIds = await this.repo.findUserIdsByRole({
+              organizationId: ctx.organizationId,
+              roleId: role.id,
+            });
+            for (const id of userIds) touchedUserIds.add(id);
+            await writeOutboxEvent(tx, {
+              eventType: DOMAIN_EVENTS.RolePermissionsChanged,
+              organizationId: ctx.organizationId,
+              actorUserId: ctx.actorUserId,
+              correlationId: ctx.correlationId,
+              payload: {
+                roleId: role.id,
+                permissions: catalogued,
+                action: "sync_system_presets",
+                isSystemRole: true,
+              },
+            });
+          }
+        }
+      }
+    });
+
+    await invalidatePermissionsForUsers(ctx.organizationId, [
+      ...touchedUserIds,
+    ]);
+
+    return { updated };
   }
 }
 

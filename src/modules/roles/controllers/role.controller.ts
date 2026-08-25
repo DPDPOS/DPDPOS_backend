@@ -50,6 +50,20 @@ export class RoleController {
       next(err);
     }
   }
+
+  async syncSystemPresets(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const result = await roleService.syncSystemPresets(ctx);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const roleController = new RoleController();
