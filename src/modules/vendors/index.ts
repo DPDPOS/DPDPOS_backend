@@ -6,21 +6,40 @@ import {
   validateQuery,
 } from "../../shared/middleware/validate.middleware.js";
 import { requirePermission } from "../../shared/guards/permission.guard.js";
+import { authenticateCli } from "../assessments/middleware/authenticate-cli.middleware.js";
 import { vendorController } from "./controllers/vendor.controller.js";
 import { vendorPermissions } from "./permissions/vendor.permissions.js";
 import {
   acknowledgeRelationshipDtoSchema,
   createVendorAgreementDtoSchema,
+  createVendorCliTokenDtoSchema,
   createVendorDtoSchema,
   createVendorRelationshipDtoSchema,
   createVendorReviewDtoSchema,
   listVendorsQuerySchema,
   updateVendorDtoSchema,
+  vendorCliSyncDtoSchema,
   vendorIdParamSchema,
 } from "./dto/vendor.dto.js";
 
 export function createVendorRouter(): Router {
   const router = Router();
+
+  // CLI routes before /:id so "cli" is not parsed as a vendor id
+  router.post(
+    "/cli/tokens",
+    authenticate,
+    requirePermission(vendorPermissions.create),
+    validateBody(createVendorCliTokenDtoSchema),
+    (req, res, next) => void vendorController.createCliToken(req, res, next),
+  );
+
+  router.post(
+    "/cli/sync",
+    authenticateCli,
+    validateBody(vendorCliSyncDtoSchema),
+    (req, res, next) => void vendorController.syncFromCli(req, res, next),
+  );
 
   router.post(
     "/",
@@ -125,7 +144,7 @@ export function createVendorRouter(): Router {
   router.post(
     "/:id/relationships/acknowledge",
     authenticate,
-    requirePermission(vendorPermissions.review),
+    requirePermission(vendorPermissions.update),
     validateParams(vendorIdParamSchema),
     validateBody(acknowledgeRelationshipDtoSchema),
     (req, res, next) =>

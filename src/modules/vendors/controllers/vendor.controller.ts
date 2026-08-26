@@ -200,6 +200,43 @@ export class VendorController {
       next(err);
     }
   }
+
+  async createCliToken(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const data = await vendorService.createCliToken(
+        req.context!,
+        req.body as import("../dto/vendor.dto.js").CreateVendorCliTokenDto,
+      );
+      sendSuccess(res, data, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async syncFromCli(
+    req: import("../../assessments/middleware/authenticate-cli.middleware.js").CliAuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const {
+        getCliContext,
+      } = await import(
+        "../../assessments/middleware/authenticate-cli.middleware.js"
+      );
+      const data = await vendorService.syncFromCli(
+        getCliContext(req),
+        req.body as import("../dto/vendor.dto.js").VendorCliSyncDto,
+      );
+      sendSuccess(res, data, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const vendorController = new VendorController();

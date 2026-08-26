@@ -768,7 +768,11 @@ export class AssessmentService {
       },
       include: {
         agreements: {
-          where: { status: "ACTIVE", deletedAt: null },
+          where: {
+            status: "ACTIVE",
+            deletedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
           take: 1,
         },
       },

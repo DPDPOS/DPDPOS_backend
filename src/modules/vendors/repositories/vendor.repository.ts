@@ -177,8 +177,18 @@ export class VendorRepository extends BaseRepository {
     ctx: RequestContext,
     id: string,
   ): Promise<VendorRecord> {
+    const existing = await db.vendor.findFirst({
+      where: {
+        id,
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+      },
+    });
+    if (!existing) {
+      throw new Error("Vendor not found for offboard");
+    }
     const row = await db.vendor.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         deletedAt: new Date(),
         status: "OFFBOARDED",

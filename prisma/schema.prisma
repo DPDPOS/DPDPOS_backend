@@ -1493,7 +1493,8 @@ model QuestionnaireAnswer {
 
 model CliToken {
   id             String    @id @default(uuid()) @db.Uuid
-  assessmentId   String    @map("assessment_id") @db.Uuid
+  /** Null for org-scoped vendor/TPRM CLI tokens (not tied to an assessment). */
+  assessmentId   String?   @map("assessment_id") @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   label          String
   tokenHash      String    @unique @map("token_hash")
@@ -1504,7 +1505,7 @@ model CliToken {
   createdBy      String?   @map("created_by") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment? @relation(fields: [assessmentId], references: [id])
 
   @@index([assessmentId])
   @@index([organizationId])

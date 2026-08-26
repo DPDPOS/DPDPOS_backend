@@ -12,7 +12,7 @@ import type { AuthenticatedRequest } from "../../../shared/types/authenticated-r
 export type CliAuthContext = {
   correlationId: string;
   organizationId: string;
-  assessmentId: string;
+  assessmentId: string | null;
   cliTokenId: string;
   actorType: "CLI";
 };
@@ -42,8 +42,10 @@ export async function authenticateCli(
     }
 
     const assessmentId = req.params.id;
-    if (assessmentId && assessmentId !== row.assessmentId) {
-      throw new ForbiddenError("CLI token is not valid for this assessment");
+    if (assessmentId) {
+      if (!row.assessmentId || assessmentId !== row.assessmentId) {
+        throw new ForbiddenError("CLI token is not valid for this assessment");
+      }
     }
 
     await prisma.cliToken.update({

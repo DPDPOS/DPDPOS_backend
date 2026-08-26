@@ -1,6 +1,6 @@
 # Vendor TPRM / SCRM + Trace alignment
 
-Status: **IMPLEMENTED** (TPRM/SCRM APIs + FE + Trace erasure/locator + CLI vendor autoscan)  
+Status: **IMPLEMENTED** (core TPRM/SCRM + Trace + CLI); DPA expiry / SCRM ack risk / offboard cleanup included in domain logic  
 Goal: First-class third-party risk (TPRM) and supply-chain risk (SCRM), framed by the 7UNIT model: **engineering audit first**, then **Trace-like operational evidence**.
 
 ---

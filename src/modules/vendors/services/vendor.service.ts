@@ -7,6 +7,11 @@ import { withTransaction } from "../../../infrastructure/database/transaction-ma
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
+import { randomBytes } from "node:crypto";
+import { hashToken } from "../../auth/utils/token-crypto.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
+import { appConfig } from "../../../config/app.config.js";
+import type { CliAuthContext } from "../../assessments/middleware/authenticate-cli.middleware.js";
 
 import { VendorRepository } from "../repositories/vendor.repository.js";
 import {
@@ -25,7 +30,9 @@ import type {
   CreateVendorAgreementDto,
   CreateVendorRelationshipDto,
   CreateVendorReviewDto,
+  CreateVendorCliTokenDto,
   UpdateVendorDto,
+  VendorCliSyncDto,
 } from "../dto/vendor.dto.js";
 
 export class VendorService {
@@ -143,10 +150,49 @@ export class VendorService {
     const existing = await this.vendors.findById(ctx.organizationId, id);
     if (!existing) throw new NotFoundError("Vendor not found");
 
-    return withTransaction(async (tx) => {
-      const vendor = await this.vendors.softDelete(tx, ctx, id);
-      return toVendorResponse(vendor);
+    const { vendor, parentIds } = await withTransaction(async (tx) => {
+      const asChild = await this.relationships.listByChild(
+        ctx.organizationId,
+        id,
+      );
+      const parentVendorIds = asChild.map((r) => r.parentVendorId);
+
+      await this.relationships.softDeleteForVendor(tx, ctx.organizationId, id);
+
+      await tx.processingActivity.updateMany({
+        where: {
+          organizationId: ctx.organizationId,
+          vendorId: id,
+          deletedAt: null,
+        },
+        data: { vendorId: null },
+      });
+
+      const offboarded = await this.vendors.softDelete(tx, ctx, id);
+
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.VendorRiskChanged,
+        organizationId: ctx.organizationId,
+        actorUserId: ctx.actorUserId,
+        correlationId: ctx.correlationId,
+        payload: {
+          vendorId: id,
+          residualRiskScore: existing.residualRiskScore,
+          flags: ["offboarded"],
+        },
+      });
+
+      return {
+        vendor: toVendorResponse(offboarded),
+        parentIds: parentVendorIds,
+      };
     });
+
+    for (const parentId of parentIds) {
+      await this.refreshScores(ctx, parentId);
+    }
+
+    return vendor;
   }
 
   async getRisk(
@@ -167,8 +213,18 @@ export class VendorService {
     if (!vendor) throw new NotFoundError("Vendor not found");
 
     const agreement = await withTransaction(async (tx) => {
+      const status = input.status ?? "DRAFT";
+      if (status === "ACTIVE") {
+        await this.agreements.supersedeActive(
+          tx,
+          ctx.organizationId,
+          vendorId,
+        );
+      }
+
       const created = await this.agreements.create(tx, ctx, vendorId, {
         ...input,
+        status,
         effectiveFrom: input.effectiveFrom
           ? new Date(input.effectiveFrom)
           : undefined,
@@ -255,6 +311,18 @@ export class VendorService {
     );
     if (!child) throw new NotFoundError("Child vendor not found");
 
+    if (
+      await this.relationships.wouldCreateCycle(
+        ctx.organizationId,
+        parentVendorId,
+        input.childVendorId,
+      )
+    ) {
+      throw new ValidationError(
+        "Linking this vendor would create a circular supply-chain relationship",
+      );
+    }
+
     const rel = await withTransaction(async (tx) => {
       const created = await this.relationships.create(tx, ctx, {
         parentVendorId,
@@ -304,9 +372,11 @@ export class VendorService {
     );
     const match = rows.find((r) => r.id === relationshipId);
     if (!match) throw new NotFoundError("Relationship not found");
-    return withTransaction(async (tx) =>
+    const row = await withTransaction(async (tx) =>
       this.relationships.acknowledge(tx, relationshipId),
     );
+    await this.refreshScores(ctx, vendorId);
+    return row;
   }
 
   async analyticsSummary(ctx: RequestContext) {
@@ -321,7 +391,12 @@ export class VendorService {
       if (score.openRiskFlags.includes("missing_dpa")) missingDpa += 1;
       if (score.openRiskFlags.includes("dpa_expiring")) dpaExpiring += 1;
       if (score.residualRiskScore >= 65) highRisk += 1;
-      if (score.openRiskFlags.includes("review_overdue")) reviewsOverdue += 1;
+      if (
+        score.openRiskFlags.includes("missing_review") ||
+        score.openRiskFlags.includes("review_overdue")
+      ) {
+        reviewsOverdue += 1;
+      }
     }
     return {
       totalVendors: vendors.length,
@@ -330,6 +405,90 @@ export class VendorService {
       highRisk,
       reviewsOverdue,
       dpaExpiring,
+    };
+  }
+
+  async createCliToken(ctx: RequestContext, dto: CreateVendorCliTokenDto) {
+    const raw = `dpdp_${randomBytes(24).toString("base64url")}`;
+    const tokenHash = hashToken(raw);
+    const expiresAt =
+      dto.expiresInDays != null
+        ? new Date(Date.now() + dto.expiresInDays * 24 * 60 * 60 * 1000)
+        : null;
+
+    const row = await prisma.cliToken.create({
+      data: {
+        assessmentId: null,
+        organizationId: ctx.organizationId,
+        label: dto.label?.trim() || "vendors-cli",
+        tokenHash,
+        tokenPrefix: raw.slice(0, 12),
+        expiresAt,
+        createdBy: ctx.actorUserId,
+      },
+    });
+
+    return {
+      id: row.id,
+      token: raw,
+      label: row.label,
+      expiresAt: row.expiresAt,
+      instructions: {
+        install: "npm install -g dpdp-cli",
+        login: `dpdp login --token ${raw} --api ${appConfig.apiPublicUrl}`,
+        scan: "dpdp vendors scan .",
+        sync: "dpdp vendors sync",
+      },
+    };
+  }
+
+  async syncFromCli(cli: CliAuthContext, dto: VendorCliSyncDto) {
+    const tokenRow = await prisma.cliToken.findUnique({
+      where: { id: cli.cliTokenId },
+    });
+    if (!tokenRow?.createdBy) {
+      throw new ValidationError(
+        "CLI token has no creating user; mint a new token from Vendors → Collect from CLI",
+      );
+    }
+
+    const ctx: RequestContext = {
+      correlationId: cli.correlationId,
+      organizationId: cli.organizationId,
+      actorUserId: tokenRow.createdBy,
+      permissions: [],
+      roles: [],
+    };
+
+    const created: VendorResponse[] = [];
+    const errors: Array<{ name: string; error: string }> = [];
+
+    for (const suggestion of dto.suggestions) {
+      try {
+        const vendor = await this.create(ctx, {
+          name: suggestion.name,
+          vendorType: "PROCESSOR",
+          status: "DRAFT",
+          criticality: "MEDIUM",
+          services: suggestion.services,
+          notes:
+            suggestion.notes ??
+            "Imported from CLI TPRM scan (dpdp vendors sync)",
+        });
+        created.push(vendor);
+      } catch (err) {
+        errors.push({
+          name: suggestion.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return {
+      createdCount: created.length,
+      failedCount: errors.length,
+      created: created.map((v) => ({ id: v.id, name: v.name })),
+      errors,
     };
   }
 
@@ -358,6 +517,11 @@ export class VendorService {
       organizationId,
       vendorId,
     );
+    const unacknowledgedChildCount =
+      await this.relationships.countUnacknowledgedChildren(
+        organizationId,
+        vendorId,
+      );
     return computeVendorRisk({
       vendor,
       hasActiveDpa: Boolean(activeDpa),
@@ -365,6 +529,7 @@ export class VendorService {
       latestReviewOutcome: latestReview?.outcome ?? null,
       latestReviewResidual: latestReview?.residualRisk ?? null,
       childCriticalCount,
+      unacknowledgedChildCount,
     });
   }
 }

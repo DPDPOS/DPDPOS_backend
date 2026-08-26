@@ -108,3 +108,27 @@ export type CreateVendorRelationshipDto = z.infer<
 export const acknowledgeRelationshipDtoSchema = z.object({
   relationshipId: z.string().uuid(),
 });
+
+export const createVendorCliTokenDtoSchema = z.object({
+  label: z.string().trim().min(1).max(100).optional(),
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+});
+
+export type CreateVendorCliTokenDto = z.infer<
+  typeof createVendorCliTokenDtoSchema
+>;
+
+export const vendorCliSyncDtoSchema = z.object({
+  suggestions: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(255),
+        services: z.string().trim().max(2000).optional(),
+        notes: z.string().trim().max(4000).optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+export type VendorCliSyncDto = z.infer<typeof vendorCliSyncDtoSchema>;

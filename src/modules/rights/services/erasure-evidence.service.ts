@@ -39,7 +39,7 @@ export class ErasureEvidenceService {
       where: {
         organizationId: ctx.organizationId,
         deletedAt: null,
-        status: { in: ["ACTIVE", "DRAFT"] },
+        status: "ACTIVE",
       },
       take: 100,
     });

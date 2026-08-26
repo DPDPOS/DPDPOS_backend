@@ -12,15 +12,50 @@ export class VendorAgreementRepository {
     });
   }
 
+  /**
+   * Calendar-expired ACTIVE rows are flipped to EXPIRED, then the current
+   * non-expired ACTIVE agreement (if any) is returned.
+   */
   async findActive(organizationId: string, vendorId: string) {
+    const now = new Date();
+    await prisma.vendorAgreement.updateMany({
+      where: {
+        organizationId,
+        vendorId,
+        status: "ACTIVE",
+        deletedAt: null,
+        expiresAt: { lte: now },
+      },
+      data: { status: "EXPIRED" },
+    });
+
     return prisma.vendorAgreement.findFirst({
       where: {
         organizationId,
         vendorId,
         status: "ACTIVE",
         deletedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
       orderBy: { expiresAt: "desc" },
+    });
+  }
+
+  async supersedeActive(
+    db: DbClient,
+    organizationId: string,
+    vendorId: string,
+    exceptId?: string,
+  ) {
+    return db.vendorAgreement.updateMany({
+      where: {
+        organizationId,
+        vendorId,
+        status: "ACTIVE",
+        deletedAt: null,
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+      },
+      data: { status: "SUPERSEDED" },
     });
   }
 
@@ -185,6 +220,21 @@ export class VendorRelationshipRepository {
     });
   }
 
+  async softDeleteForVendor(
+    db: DbClient,
+    organizationId: string,
+    vendorId: string,
+  ) {
+    return db.vendorRelationship.updateMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        OR: [{ parentVendorId: vendorId }, { childVendorId: vendorId }],
+      },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   async countCriticalChildren(
     organizationId: string,
     parentVendorId: string,
@@ -202,5 +252,47 @@ export class VendorRelationshipRepository {
       select: { id: true },
     });
     return rows.length;
+  }
+
+  async countUnacknowledgedChildren(
+    organizationId: string,
+    parentVendorId: string,
+  ): Promise<number> {
+    return prisma.vendorRelationship.count({
+      where: {
+        organizationId,
+        parentVendorId,
+        deletedAt: null,
+        acknowledgedAt: null,
+      },
+    });
+  }
+
+  /**
+   * True if linking parent→child would create a cycle (child already reaches parent).
+   */
+  async wouldCreateCycle(
+    organizationId: string,
+    parentVendorId: string,
+    childVendorId: string,
+  ): Promise<boolean> {
+    const visited = new Set<string>();
+    const queue = [childVendorId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current === parentVendorId) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      const edges = await prisma.vendorRelationship.findMany({
+        where: {
+          organizationId,
+          parentVendorId: current,
+          deletedAt: null,
+        },
+        select: { childVendorId: true },
+      });
+      for (const e of edges) queue.push(e.childVendorId);
+    }
+    return false;
   }
 }
