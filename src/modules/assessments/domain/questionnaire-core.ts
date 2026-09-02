@@ -342,7 +342,41 @@ export const CORE_QUESTIONNAIRE: QuestionnaireQuestion[] = [
     label:
       "Does the process include notifying the Board and affected principals as required?",
     helpText:
-      "Breach duties include Data Protection Board notification and, where required, informing Data Principals.",
+      "Breach duties include Data Protection Board notification within 72 hours and informing affected Data Principals.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-GRIEVANCE-OFFICER",
+    stageId: "rights",
+    stageLabel: "Data Principal rights",
+    stageOrder: 4,
+    label: "Is a grievance officer appointed with published name and contact details?",
+    helpText:
+      "DPDP s.8(6) mandates a grievance officer — distinct from a general grievance process contact.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-CONSENT-MGR",
+    stageId: "notice_consent",
+    stageLabel: "Notice & consent",
+    stageOrder: 2,
+    label: "Are you prepared to integrate with registered Consent Managers per DPDP Rule 4?",
+    helpText:
+      "Consent Managers are registered intermediaries — assess readiness before the November 2026 registration deadline.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-AUTO-DELETE",
+    stageId: "retention_breach",
+    stageLabel: "Retention & breach readiness",
+    stageOrder: 6,
+    label:
+      "When purpose expires, is data automatically erased with 48-hour advance notice to data principals?",
+    helpText:
+      "DPDP Rule 8 mandates automated erasure when purpose is no longer served, with 48-hour advance notice.",
     valueType: "boolean",
     required: true,
   },

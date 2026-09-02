@@ -22,7 +22,11 @@ export const generateReportDtoSchema = z.object({
     .object({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
+      status: z.string().optional(),
+      controlId: z.string().uuid().optional(),
+      violationId: z.string().uuid().optional(),
     })
+    .passthrough()
     .optional(),
 });
 

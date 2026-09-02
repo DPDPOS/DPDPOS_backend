@@ -8,6 +8,7 @@ export const QUEUE_NAMES = {
   EXPORT: "export-queue",
   EVENT_RELAY: "event-relay-queue",
   EMAIL_CRITICAL: "email-critical",
+  AGENT_TASKS: "agent-tasks-queue",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

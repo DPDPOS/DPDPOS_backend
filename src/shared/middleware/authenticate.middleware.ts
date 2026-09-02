@@ -65,6 +65,14 @@ export async function authenticate(
       }
     }
 
+    const forwarded = req.headers["x-forwarded-for"];
+    const forwardedIp =
+      typeof forwarded === "string"
+        ? forwarded.split(",")[0]?.trim()
+        : Array.isArray(forwarded)
+          ? forwarded[0]
+          : undefined;
+
     const context: RequestContext = {
       correlationId:
         req.correlationId ?? getCorrelationId() ?? claims.jti ?? claims.sub,
@@ -72,6 +80,11 @@ export async function authenticate(
       actorUserId: claims.sub,
       permissions,
       roles,
+      ipAddress: forwardedIp || req.ip || undefined,
+      userAgent:
+        typeof req.headers["user-agent"] === "string"
+          ? req.headers["user-agent"]
+          : undefined,
       ...(claims.mfaVerified !== undefined
         ? { mfaVerified: claims.mfaVerified }
         : {}),

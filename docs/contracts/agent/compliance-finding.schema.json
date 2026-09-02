@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dpdpos.example/schemas/agent/compliance-finding.schema.json",
+  "title": "ComplianceFinding",
+  "description": "A compliance observation. The Control Plane owns persisted status and decides whether to derive a Violation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "dedupeKey", "ruleCode", "title", "severity", "firstSeenAt", "lastSeenAt"],
+  "properties": {
+    "source": { "enum": ["AGENT", "ASSESSMENT", "VALIDATION", "MANUAL"] },
+    "sourceKey": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "dedupeKey": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "ruleCode": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "description": { "type": "string", "maxLength": 16384 },
+    "severity": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+    "status": { "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"] },
+    "systemExternalId": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "assetExternalId": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "firstSeenAt": { "type": "string", "format": "date-time" },
+    "lastSeenAt": { "type": "string", "format": "date-time" }
+  }
+}

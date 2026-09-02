@@ -77,8 +77,8 @@ export class ValidationRuleService {
         description:
           input.description ?? evaluator.descriptor.description,
         legalBasisRef: input.legalBasisRef,
-        severity: input.severity ?? evaluator.descriptor.severity,
-        category: input.category ?? evaluator.descriptor.category,
+        severity: (input.severity ?? evaluator.descriptor.severity) as never,
+        category: (input.category ?? evaluator.descriptor.category) as never,
       });
 
       return toValidationRuleResponse(rule);

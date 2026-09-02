@@ -11,6 +11,37 @@ export type VendorValidationSnapshot = {
   criticality: string;
   hasActiveDpa: boolean;
   latestReviewOutcome: string | null;
+  crossBorderAllowed: boolean;
+};
+
+export type ControlValidationSnapshot = {
+  id: string;
+  code: string;
+  status: string;
+  approvedEvidenceCount: number;
+};
+
+export type OrganizationValidationSnapshot = {
+  isSignificantDataFiduciary: boolean;
+  processesChildrenData: boolean;
+  hasDpoUser: boolean;
+  frameworkId: string | null;
+};
+
+export type OpenFindingValidationSnapshot = {
+  id: string;
+  ruleCode: string;
+  severity: string;
+  status: string;
+  systemId: string | null;
+  dataAssetId: string | null;
+  lastSeenAt: Date;
+};
+
+export type AgentValidationSnapshot = {
+  id: string;
+  state: string;
+  lastHeartbeatAt: Date | null;
 };
 
 /**
@@ -19,6 +50,8 @@ export type VendorValidationSnapshot = {
  */
 export type RuleEvaluationInput = {
   organizationId: string;
+  organization: OrganizationValidationSnapshot;
+  controls: ControlValidationSnapshot[];
 
   dataAssets: DataAssetRecord[];
   processingActivities: ProcessingActivityRecord[];
@@ -26,4 +59,8 @@ export type RuleEvaluationInput = {
   consentRecords: ConsentRecordRecord[];
   dataSubjectRequests: DataSubjectRequestRecord[];
   vendors?: VendorValidationSnapshot[];
+  openErasureRequests: number;
+  openFindings: OpenFindingValidationSnapshot[];
+  agents: AgentValidationSnapshot[];
+  catalogRevisionAgeHours: number | null;
 };

@@ -1,10 +1,7 @@
-import type {
-  RuleCategory,
-  RuleSeverity,
-  ValidationResultStatus,
-} from "@prisma/client";
+import type { ValidationResultStatus } from "@prisma/client";
 
 import type { RuleEvaluationInput } from "./rule-evaluation.types.js";
+import type { RULE_CATEGORIES, RULE_SEVERITIES } from "../dto/validation-rule.dto.js";
 
 /** Static metadata a rule evaluator declares about itself. */
 export type RuleDescriptor = {
@@ -12,8 +9,8 @@ export type RuleDescriptor = {
   code: string;
   title: string;
   description: string;
-  category: RuleCategory;
-  severity: RuleSeverity;
+  category: (typeof RULE_CATEGORIES)[number];
+  severity: (typeof RULE_SEVERITIES)[number];
 };
 
 export type RuleEvaluationOutcome = {
@@ -25,6 +22,9 @@ export type RuleEvaluationOutcome = {
   evidenceRequired?: boolean;
   /** Optional framework control id for traceability. */
   controlId?: string;
+  /** Optional affected entity used for cross-run violation deduplication. */
+  entityType?: string;
+  entityId?: string;
 };
 
 /**

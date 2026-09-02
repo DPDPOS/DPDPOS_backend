@@ -354,6 +354,18 @@ export class AssessmentController {
       next(err);
     }
   }
+
+  async verifyAudit(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await assessmentService.verifyAudit(
+        getRequestContext(req),
+        param(req.params.id, "id"),
+      );
+      sendSuccess(res, data);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const assessmentController = new AssessmentController();

@@ -104,6 +104,45 @@ export class RequirementRepository extends BaseRepository {
     });
   }
 
+  async update(
+    db: DbClient,
+    id: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      legalBasisRef?: string | null;
+      status?: import("@prisma/client").RequirementStatus;
+      updatedBy: string;
+    },
+  ): Promise<Requirement> {
+    return db.requirement.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.legalBasisRef !== undefined
+          ? { legalBasisRef: data.legalBasisRef }
+          : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        updatedBy: data.updatedBy,
+      },
+    });
+  }
+
+  async softDelete(
+    db: DbClient,
+    id: string,
+    updatedBy: string,
+  ): Promise<Requirement> {
+    return db.requirement.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        updatedBy,
+      },
+    });
+  }
+
   async findFrameworkInOrg(query: TenantScopedQuery & { frameworkId: string }) {
     const where = this.tenantWhere(query);
     return prisma.framework.findFirst({

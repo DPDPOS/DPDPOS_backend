@@ -3,6 +3,18 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: string; body: str
     subject: 'New Violation: {title}',
     body: 'A new {severity} violation "{title}" has been opened and requires attention.',
   },
+  VIOLATION_CLOSED: {
+    subject: 'Violation Closed: {title}',
+    body: 'Violation "{title}" has been closed.',
+  },
+  REMEDIATION_TASK_ASSIGNED: {
+    subject: 'Remediation assigned: {title}',
+    body: 'A remediation task was assigned to you (violation {violationId}).',
+  },
+  REMEDIATION_COMPLETED: {
+    subject: 'Remediation completed: {title}',
+    body: 'A remediation task was completed. Review the parent violation to validate or close it.',
+  },
   EVIDENCE_APPROVED: {
     subject: 'Evidence Approved: {fileName}',
     body: 'Evidence file "{fileName}" has been approved.',

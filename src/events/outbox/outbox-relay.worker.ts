@@ -23,6 +23,11 @@ async function relayOnce(options?: { organizationId?: string }): Promise<void> {
 
     for (const row of rows) {
       try {
+        const rawPayload = (row.payload as Record<string, unknown>) ?? {};
+        const client = (rawPayload.__client as
+          | { ipAddress?: string; userAgent?: string }
+          | undefined) ?? undefined;
+        const { __client: _omit, ...payload } = rawPayload;
         const event: BaseDomainEvent = {
           eventId: row.id,
           eventType: row.eventType as DomainEventName,
@@ -30,7 +35,9 @@ async function relayOnce(options?: { organizationId?: string }): Promise<void> {
           occurredAt: row.createdAt.toISOString(),
           actorUserId: row.actorUserId ?? undefined,
           correlationId: row.correlationId ?? undefined,
-          payload: (row.payload as Record<string, unknown>) ?? {},
+          payload,
+          ipAddress: client?.ipAddress,
+          userAgent: client?.userAgent,
         };
         await publishDomainEvent(event);
         await markOutboxPublished([row.id], row.lockToken);

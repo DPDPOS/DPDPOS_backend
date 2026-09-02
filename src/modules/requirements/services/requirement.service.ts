@@ -15,12 +15,15 @@ import type {
   CreateRequirementDto,
   ListRequirementsQuery,
   MapRequirementDto,
+  UpdateRequirementDto,
 } from "../dto/requirement.dto.js";
 import { RequirementRepository } from "../repositories/requirement.repository.js";
 import {
   toRequirementResponse,
   type RequirementResponse,
 } from "../types/requirement.types.js";
+import { computeRequirementStatus } from "./requirement-status.service.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
 
 export class RequirementService {
   constructor(private readonly repo = new RequirementRepository()) {}
@@ -105,6 +108,132 @@ export class RequirementService {
 
       return toRequirementResponse(requirement);
     });
+  }
+
+  async getById(
+    ctx: RequestContext,
+    requirementId: string,
+  ): Promise<RequirementResponse> {
+    const requirement = await this.repo.findById({
+      organizationId: ctx.organizationId,
+      id: requirementId,
+    });
+    if (!requirement) {
+      throw new NotFoundError("Requirement not found");
+    }
+    return toRequirementResponse(requirement);
+  }
+
+  async update(
+    ctx: RequestContext,
+    requirementId: string,
+    input: UpdateRequirementDto,
+  ): Promise<RequirementResponse> {
+    const existing = await this.repo.findById({
+      organizationId: ctx.organizationId,
+      id: requirementId,
+    });
+    if (!existing) {
+      throw new NotFoundError("Requirement not found");
+    }
+
+    return withTransaction(async (tx) => {
+      const updated = await this.repo.update(tx, requirementId, {
+        title: input.title?.trim(),
+        description: input.description?.trim(),
+        legalBasisRef: input.legalBasisRef?.trim(),
+        status: input.status,
+        updatedBy: ctx.actorUserId,
+      });
+      return toRequirementResponse(updated);
+    });
+  }
+
+  async delete(
+    ctx: RequestContext,
+    requirementId: string,
+  ): Promise<RequirementResponse> {
+    const existing = await this.repo.findById({
+      organizationId: ctx.organizationId,
+      id: requirementId,
+    });
+    if (!existing) {
+      throw new NotFoundError("Requirement not found");
+    }
+
+    return withTransaction(async (tx) => {
+      const deleted = await this.repo.softDelete(
+        tx,
+        requirementId,
+        ctx.actorUserId,
+      );
+      return toRequirementResponse(deleted);
+    });
+  }
+
+  async getEvidence(
+    ctx: RequestContext,
+    requirementId: string,
+  ): Promise<{ items: unknown[] }> {
+    const requirement = await this.repo.findById({
+      organizationId: ctx.organizationId,
+      id: requirementId,
+    });
+    if (!requirement) {
+      throw new NotFoundError("Requirement not found");
+    }
+    if (!requirement.controlId) {
+      return { items: [] };
+    }
+
+    const items = await prisma.evidenceFile.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        controlId: requirement.controlId,
+        deletedAt: null,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return { items };
+  }
+
+  async syncStatusFromControl(
+    ctx: RequestContext,
+    controlId: string,
+    controlStatus: import("@prisma/client").ControlStatus,
+  ): Promise<void> {
+    const requirements = await prisma.requirement.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        controlId,
+        deletedAt: null,
+      },
+    });
+
+    const approvedCount = await prisma.evidenceFile.count({
+      where: {
+        organizationId: ctx.organizationId,
+        controlId,
+        status: { in: ["APPROVED", "LOCKED"] },
+        deletedAt: null,
+      },
+    });
+
+    for (const req of requirements) {
+      const status = computeRequirementStatus({
+        controlStatus,
+        manualStatus: req.status,
+        hasApprovedEvidence: approvedCount > 0,
+      });
+
+      if (status !== req.status) {
+        await prisma.requirement.update({
+          where: { id: req.id },
+          data: { status, updatedBy: ctx.actorUserId },
+        });
+      }
+    }
   }
 
   /**

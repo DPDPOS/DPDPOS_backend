@@ -13,6 +13,7 @@ import {
   listRequirementsQuerySchema,
   mapRequirementDtoSchema,
   requirementIdParamsSchema,
+  updateRequirementDtoSchema,
 } from "../dto/requirement.dto.js";
 
 export function createRequirementsRouter(): Router {
@@ -32,6 +33,39 @@ export function createRequirementsRouter(): Router {
     requirePermission(requirementPermissions.create),
     validateBody(createRequirementDtoSchema),
     (req, res, next) => void requirementController.create(req, res, next),
+  );
+
+  router.get(
+    "/:id",
+    authenticate,
+    requirePermission(requirementPermissions.read),
+    validateParams(requirementIdParamsSchema),
+    (req, res, next) => void requirementController.getById(req, res, next),
+  );
+
+  router.get(
+    "/:id/evidence",
+    authenticate,
+    requirePermission(requirementPermissions.read),
+    validateParams(requirementIdParamsSchema),
+    (req, res, next) => void requirementController.getEvidence(req, res, next),
+  );
+
+  router.patch(
+    "/:id",
+    authenticate,
+    requirePermission(requirementPermissions.update),
+    validateParams(requirementIdParamsSchema),
+    validateBody(updateRequirementDtoSchema),
+    (req, res, next) => void requirementController.update(req, res, next),
+  );
+
+  router.delete(
+    "/:id",
+    authenticate,
+    requirePermission(requirementPermissions.delete),
+    validateParams(requirementIdParamsSchema),
+    (req, res, next) => void requirementController.delete(req, res, next),
   );
 
   // Map an existing requirement onto a control (RequirementMapped outbox).

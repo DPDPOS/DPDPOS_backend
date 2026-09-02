@@ -52,3 +52,77 @@ export async function appendAssessmentAudit(params: {
     },
   });
 }
+
+/**
+ * Recomputes the hash chain for an assessment and reports whether it is intact.
+ */
+export async function verifyAssessmentAuditChain(params: {
+  assessmentId: string;
+  organizationId: string;
+}): Promise<{
+  valid: boolean;
+  eventCount: number;
+  brokenAtId: string | null;
+  expectedHash: string | null;
+  actualHash: string | null;
+}> {
+  const events = await prisma.assessmentAuditEvent.findMany({
+    where: {
+      assessmentId: params.assessmentId,
+      organizationId: params.organizationId,
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      action: true,
+      objectType: true,
+      objectId: true,
+      payloadHash: true,
+      eventHash: true,
+      prevEventHash: true,
+    },
+  });
+
+  let prev: string | null = null;
+  for (const event of events) {
+    if ((event.prevEventHash ?? null) !== prev) {
+      return {
+        valid: false,
+        eventCount: events.length,
+        brokenAtId: event.id,
+        expectedHash: prev,
+        actualHash: event.prevEventHash,
+      };
+    }
+    const recomputed: string = createHash("sha256")
+      .update(
+        [
+          params.assessmentId,
+          event.action,
+          event.objectType,
+          event.objectId ?? "",
+          event.payloadHash,
+          prev ?? "GENESIS",
+        ].join("|"),
+      )
+      .digest("hex");
+    if (recomputed !== event.eventHash) {
+      return {
+        valid: false,
+        eventCount: events.length,
+        brokenAtId: event.id,
+        expectedHash: recomputed,
+        actualHash: event.eventHash,
+      };
+    }
+    prev = event.eventHash;
+  }
+
+  return {
+    valid: true,
+    eventCount: events.length,
+    brokenAtId: null,
+    expectedHash: null,
+    actualHash: null,
+  };
+}

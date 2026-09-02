@@ -27,7 +27,10 @@ Browser ──► Vercel (frontend)
                │                 └──► Upstash Redis
                │                 └──► object storage
 CLI (npm) ──► Render API  (Bearer dpdp_… token)
+Zone Agent ──► Render API  (mTLS or X-Agent-Id in dev; dial-out only)
 ```
+
+Control Plane agent APIs, PKI, and hardening notes: see [`18_control_plane_hardening.md`](18_control_plane_hardening.md) and [`16_agent_control_plane_contract.md`](16_agent_control_plane_contract.md). Frontend screen map: [`17_frontend_control_plane_screens.md`](17_frontend_control_plane_screens.md).
 
 ### Free-tier limits you must accept
 

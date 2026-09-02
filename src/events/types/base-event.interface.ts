@@ -39,7 +39,16 @@ export type DomainEventName =
   | "DpaExpiring"
   | "SubProcessorAdded"
   | "ErasureSoftDeleted"
-  | "ErasureCompleted";
+  | "ErasureCompleted"
+  | "AgentEnrolled"
+  | "AgentHeartbeat"
+  | "CatalogRevisionCreated"
+  | "ComplianceFindingUpserted"
+  | "DsrTaskDispatched"
+  | "DsrTaskCompleted"
+  | "DsrTaskEscalated"
+  | "PluginPublished"
+  | "LedgerEntryAppended";
 
 export interface BaseDomainEvent<TPayload = Record<string, unknown>> {
   eventId: string;
@@ -49,6 +58,8 @@ export interface BaseDomainEvent<TPayload = Record<string, unknown>> {
   actorUserId?: string;
   correlationId?: string;
   payload: TPayload;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export const DOMAIN_EVENTS = {
@@ -93,4 +104,13 @@ export const DOMAIN_EVENTS = {
   SubProcessorAdded: "SubProcessorAdded",
   ErasureSoftDeleted: "ErasureSoftDeleted",
   ErasureCompleted: "ErasureCompleted",
+  AgentEnrolled: "AgentEnrolled",
+  AgentHeartbeat: "AgentHeartbeat",
+  CatalogRevisionCreated: "CatalogRevisionCreated",
+  ComplianceFindingUpserted: "ComplianceFindingUpserted",
+  DsrTaskDispatched: "DsrTaskDispatched",
+  DsrTaskCompleted: "DsrTaskCompleted",
+  DsrTaskEscalated: "DsrTaskEscalated",
+  PluginPublished: "PluginPublished",
+  LedgerEntryAppended: "LedgerEntryAppended",
 } as const satisfies Record<DomainEventName, DomainEventName>;

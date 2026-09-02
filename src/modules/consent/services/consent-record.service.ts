@@ -17,6 +17,7 @@ import {
   toConsentRecordResponse,
   type ConsentRecordResponse,
 } from "../types/consent-record.types.js";
+import { publishConsentInvalidation } from "../../../infrastructure/cache/consent-invalidation.js";
 
 export class ConsentRecordService {
   constructor(
@@ -125,7 +126,7 @@ export class ConsentRecordService {
       throw new ConflictError("Consent has already been withdrawn");
     }
 
-    return withTransaction(async (tx) => {
+    const result = await withTransaction(async (tx) => {
       const record = await this.repository.withdraw(
         tx,
         ctx,
@@ -145,6 +146,13 @@ export class ConsentRecordService {
 
       return toConsentRecordResponse(record);
     });
+
+    await publishConsentInvalidation(
+      ctx.organizationId,
+      existing.dataSubjectIdentifier,
+      existing.purpose,
+    );
+    return result;
   }
 }
 

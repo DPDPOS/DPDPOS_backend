@@ -135,13 +135,13 @@ describe("Validation engine (VLD-003)", () => {
     const seeded = await prisma.validationRule.findMany({
       where: { organizationId: orgId, deletedAt: null },
     });
-    expect(seeded.length).toBe(7);
+    expect(seeded.length).toBe(14);
     seeded.forEach((r) => createdRuleIds.push(r.id));
 
     const results = await prisma.validationResult.findMany({
       where: { runId: run.id },
     });
-    expect(results.length).toBe(7);
+    expect(results.length).toBe(14);
 
     // notice-present must FAIL for an org with no notices.
     const noticeResult = results.find((r) => r.ruleCode === "notice-present");
@@ -174,7 +174,7 @@ describe("Validation engine (VLD-003)", () => {
     const results = await prisma.validationResult.findMany({
       where: { runId: run.id },
     });
-    expect(results.length).toBe(7);
+    expect(results.length).toBe(14);
   });
 
   it("marks a run PARTIAL when a rule evaluation errors", async () => {
@@ -369,7 +369,7 @@ describe("Validation engine (VLD-003)", () => {
 
     const detail = await runsService.getById(ctx, run.id);
     expect(detail.id).toBe(run.id);
-    expect(detail.results.length).toBe(7);
+    expect(detail.results.length).toBe(14);
 
     const all = await runsService.list(ctx);
     expect(all.some((r) => r.id === run.id)).toBe(true);

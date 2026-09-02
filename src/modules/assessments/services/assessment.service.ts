@@ -20,6 +20,7 @@ import { sanitizeAiContext } from "../../ai/domain/context-builders/sanitize-ai-
 import { env } from "../../../config/env.js";
 import { appendAssessmentAudit } from "./assessment-audit.service.js";
 import { evaluateControls } from "./control-engine.service.js";
+import { resolveFrameworkCode } from "../../controls/domain/control-catalog.js";
 import type {
   ConfirmDocumentDto,
   CreateAssessmentDto,
@@ -804,6 +805,7 @@ export class AssessmentService {
 
     await prisma.$transaction(async (tx) => {
       for (const r of evaluated.results) {
+        const frameworkControlCode = resolveFrameworkCode(r.controlCode);
         await tx.assessmentControlResult.upsert({
           where: {
             assessmentId_versionNumber_controlCode: {
@@ -817,12 +819,14 @@ export class AssessmentService {
             organizationId: ctx.organizationId,
             versionNumber: version,
             controlCode: r.controlCode,
+            frameworkControlCode,
             status: r.status,
             severity: r.severity,
             reasoning: r.reasoning,
             evidenceRefs: r.evidenceRefs as Prisma.InputJsonValue,
           },
           update: {
+            frameworkControlCode,
             status: r.status,
             severity: r.severity,
             reasoning: r.reasoning,
@@ -1035,6 +1039,17 @@ export class AssessmentService {
         prevEventHash: true,
         createdAt: true,
       },
+    });
+  }
+
+  async verifyAudit(ctx: RequestContext, assessmentId: string) {
+    await requireAssessment(ctx.organizationId, assessmentId);
+    const { verifyAssessmentAuditChain } = await import(
+      "./assessment-audit.service.js"
+    );
+    return verifyAssessmentAuditChain({
+      assessmentId,
+      organizationId: ctx.organizationId,
     });
   }
 }

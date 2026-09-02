@@ -118,6 +118,8 @@ export class FrameworkRepository extends BaseRepository {
       title: string;
       description: string;
       legalBasisRef: string;
+      phase?: string;
+      sdfOverlay?: boolean;
       dueAt: Date;
       createdBy: string;
       updatedBy: string;
@@ -131,6 +133,8 @@ export class FrameworkRepository extends BaseRepository {
         title: data.title,
         description: data.description,
         legalBasisRef: data.legalBasisRef,
+        phase: data.phase,
+        sdfOverlay: data.sdfOverlay ?? false,
         dueAt: data.dueAt,
         status: "NOT_STARTED",
         createdBy: data.createdBy,

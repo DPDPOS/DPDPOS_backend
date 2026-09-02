@@ -8,6 +8,7 @@ import type { ValidatedRequest } from "../../../shared/middleware/validate.middl
 import type {
   GenerateFrameworkDto,
   PublishFrameworkDto,
+  RegenerateFrameworkDto,
   RoadmapQuery,
 } from "../dto/framework.dto.js";
 import { frameworkService } from "../services/framework.service.js";
@@ -29,6 +30,28 @@ export class FrameworkController {
       const ctx = getRequestContext(req);
       const query = ((req as ValidatedRequest).validatedQuery ?? {}) as RoadmapQuery;
       const framework = await frameworkService.getRoadmap(ctx, query.frameworkId);
+      sendSuccess(res, framework);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async previewRegenerate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const body = req.body as RegenerateFrameworkDto;
+      const diff = await frameworkService.previewRegenerate(ctx, body);
+      sendSuccess(res, diff);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async regenerate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const body = req.body as RegenerateFrameworkDto;
+      const framework = await frameworkService.regenerate(ctx, body);
       sendSuccess(res, framework);
     } catch (err) {
       next(err);

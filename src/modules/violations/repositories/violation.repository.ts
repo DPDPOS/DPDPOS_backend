@@ -1,4 +1,5 @@
 import type {
+  FindingSource,
   Prisma,
   Violation as PrismaViolation,
   RuleSeverity,
@@ -15,7 +16,14 @@ type DbClient = Prisma.TransactionClient | typeof prisma;
 
 export type CreateViolationData = {
   validationResultId?: string;
+  controlId?: string;
+  assessmentControlCode?: string;
   sourceKey?: string;
+  findingSource?: FindingSource;
+  dedupeKey?: string;
+  complianceFindingId?: string;
+  agentId?: string;
+  assessmentId?: string;
   severity: RuleSeverity;
   title: string;
   description?: string;
@@ -38,6 +46,7 @@ export type UpdateViolationData = {
 export type ListViolationsOptions = {
   status?: ViolationStatus;
   severity?: RuleSeverity;
+  findingSource?: FindingSource;
   assignedTo?: string;
   includeDeleted?: boolean;
 };
@@ -49,6 +58,11 @@ function mapViolation(row: PrismaViolation): ViolationRecord {
 
     validationResultId: row.validationResultId,
     sourceKey: row.sourceKey,
+    findingSource: row.findingSource,
+    dedupeKey: row.dedupeKey,
+    complianceFindingId: row.complianceFindingId,
+    agentId: row.agentId,
+    assessmentId: row.assessmentId,
     severity: row.severity,
     title: row.title,
     description: row.description,
@@ -121,6 +135,21 @@ export class ViolationRepository extends BaseRepository {
     return row ? mapViolation(row) : null;
   }
 
+  async findOpenByDedupeKey(
+    organizationId: string,
+    dedupeKey: string,
+  ): Promise<ViolationRecord | null> {
+    const row = await prisma.violation.findFirst({
+      where: {
+        organizationId,
+        dedupeKey,
+        status: "OPEN",
+        deletedAt: null,
+      },
+    });
+    return row ? mapViolation(row) : null;
+  }
+
   async list(
     organizationId: string,
     options: ListViolationsOptions = {},
@@ -133,6 +162,9 @@ export class ViolationRepository extends BaseRepository {
         }),
         ...(options.status ? { status: options.status } : {}),
         ...(options.severity ? { severity: options.severity } : {}),
+        ...(options.findingSource
+          ? { findingSource: options.findingSource }
+          : {}),
         ...(options.assignedTo ? { assignedTo: options.assignedTo } : {}),
       },
       orderBy: {
@@ -153,7 +185,14 @@ export class ViolationRepository extends BaseRepository {
         organizationId: ctx.organizationId,
 
         validationResultId: data.validationResultId,
+        controlId: data.controlId,
+        assessmentControlCode: data.assessmentControlCode,
         sourceKey: data.sourceKey,
+        findingSource: data.findingSource,
+        dedupeKey: data.dedupeKey,
+        complianceFindingId: data.complianceFindingId,
+        agentId: data.agentId,
+        assessmentId: data.assessmentId,
         severity: data.severity,
         title: data.title,
         description: data.description,
@@ -165,6 +204,30 @@ export class ViolationRepository extends BaseRepository {
       },
     });
 
+    return mapViolation(row);
+  }
+
+  async refreshOpenByDedupeKey(
+    db: DbClient,
+    ctx: RequestContext,
+    dedupeKey: string,
+  ): Promise<ViolationRecord | null> {
+    const existing = await db.violation.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        dedupeKey,
+        status: "OPEN",
+        deletedAt: null,
+      },
+    });
+    if (!existing) return null;
+    const row = await db.violation.update({
+      where: { id: existing.id },
+      data: {
+        updatedAt: new Date(),
+        ...this.auditUpdateFields(ctx),
+      },
+    });
     return mapViolation(row);
   }
 

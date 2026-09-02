@@ -7,7 +7,10 @@ import type { EvidenceFileRecord } from "../dto/evidence-response.dto.js";
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 function mapRow(row: EvidenceFile): EvidenceFileRecord {
-  return row;
+  return {
+    ...row,
+    tags: row.tags ?? [],
+  };
 }
 
 export class EvidenceRepository extends BaseRepository {

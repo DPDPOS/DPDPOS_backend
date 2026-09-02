@@ -9,6 +9,24 @@ import {
   VendorDpaPresentRule,
   VendorReviewCurrentRule,
 } from "../rules/vendor-rules.js";
+import {
+  AutoDeletionEnforcedRule,
+  BreachNotificationReadyRule,
+  ChildrenDataProtectedRule,
+  CrossBorderTransferControlledRule,
+  EncryptionSafeguardsRule,
+  PurposeLimitationDocumentedRule,
+  SdfDpoAppointedRule,
+} from "../rules/dpdp-extended.rules.js";
+import {
+  AgentHealthRule,
+  CatalogFreshnessRule,
+  ConsentCacheFreshnessRule,
+  DataFlowComplianceRule,
+  DsrEscalatedRule,
+  PiiWithoutBasisRule,
+  UnmappedSystemRule,
+} from "../rules/agent-control-plane.rules.js";
 
 const EVALUATORS: ValidationRuleEvaluator[] = [
   new NoticePresentRule(),
@@ -18,6 +36,20 @@ const EVALUATORS: ValidationRuleEvaluator[] = [
   new RequestRespondedWithinSlaRule(),
   new VendorDpaPresentRule(),
   new VendorReviewCurrentRule(),
+  new BreachNotificationReadyRule(),
+  new EncryptionSafeguardsRule(),
+  new CrossBorderTransferControlledRule(),
+  new ChildrenDataProtectedRule(),
+  new SdfDpoAppointedRule(),
+  new PurposeLimitationDocumentedRule(),
+  new AutoDeletionEnforcedRule(),
+  new UnmappedSystemRule(),
+  new PiiWithoutBasisRule(),
+  new CatalogFreshnessRule(),
+  new AgentHealthRule(),
+  new ConsentCacheFreshnessRule(),
+  new DsrEscalatedRule(),
+  new DataFlowComplianceRule(),
 ];
 
 const BY_CODE = new Map(

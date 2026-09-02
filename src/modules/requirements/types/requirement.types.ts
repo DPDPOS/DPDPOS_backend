@@ -9,6 +9,7 @@ export type RequirementResponse = {
   title: string;
   description: string | null;
   legalBasisRef: string | null;
+  status: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -23,6 +24,7 @@ export function toRequirementResponse(row: Requirement): RequirementResponse {
     title: row.title,
     description: row.description,
     legalBasisRef: row.legalBasisRef,
+    status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

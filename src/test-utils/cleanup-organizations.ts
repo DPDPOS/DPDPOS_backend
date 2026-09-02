@@ -33,6 +33,22 @@ export async function deleteTestOrganizations(
     await prisma.evidenceFile.deleteMany({ where: orgWhere });
     await prisma.violation.deleteMany({ where: orgWhere });
 
+    // Control plane / agents (before inventory FKs)
+    await prisma.evidenceLedgerEntry.deleteMany({ where: orgWhere });
+    await prisma.complianceFinding.deleteMany({ where: orgWhere });
+    await prisma.identityGraphEdge.deleteMany({ where: orgWhere });
+    await prisma.dataField.deleteMany({ where: orgWhere });
+    await prisma.agentTask.deleteMany({ where: orgWhere });
+    await prisma.agentCertificate.deleteMany({
+      where: { agent: { organizationId: { in: ids } } },
+    });
+    await prisma.catalogRevision.deleteMany({ where: orgWhere });
+    await prisma.dataSystem.deleteMany({ where: orgWhere });
+    await prisma.agent.deleteMany({ where: orgWhere });
+    await prisma.agentEnrollmentToken.deleteMany({ where: orgWhere });
+    await prisma.organizationControlPlaneSettings.deleteMany({ where: orgWhere });
+    await prisma.plugin.deleteMany({ where: { organizationId: { in: ids } } });
+
     // Validation (results first; workers may recreate mid-teardown)
     const runs = await prisma.validationRun.findMany({
       where: orgWhere,

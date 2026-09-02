@@ -57,6 +57,14 @@ enum ControlStatus {
   VERIFIED
 }
 
+enum RequirementStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SATISFIED
+  VERIFIED
+  NOT_APPLICABLE
+}
+
 model Organization {
   id                         String             @id @default(uuid()) @db.Uuid
   name                       String
@@ -102,6 +110,18 @@ model Organization {
   identityProviders    IdentityProvider[]
   identityGroupRoleMaps IdentityGroupRoleMap[]
   identitySyncRuns     IdentitySyncRun[]
+  controlPlaneSettings OrganizationControlPlaneSettings?
+  agentEnrollmentTokens AgentEnrollmentToken[]
+  agents               Agent[]
+  agentTasks            AgentTask[]
+  dataSystems           DataSystem[]
+  dataFields            DataField[]
+  catalogRevisions      CatalogRevision[]
+  identityGraphEdges    IdentityGraphEdge[]
+  complianceFindings    ComplianceFinding[]
+  evidenceLedgerEntries EvidenceLedgerEntry[]
+  plugins               Plugin[]
+  rulepacks             Rulepack[]
 
   @@map("organizations")
 }
@@ -330,6 +350,8 @@ model Control {
   code           String
   title          String
   description    String?
+  phase          String?
+  sdfOverlay     Boolean       @default(false) @map("sdf_overlay")
   ownerUserId    String?       @map("owner_user_id") @db.Uuid
   dueAt          DateTime?     @map("due_at")
   status         ControlStatus @default(NOT_STARTED)
@@ -340,10 +362,12 @@ model Control {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  framework     Framework      @relation(fields: [frameworkId], references: [id])
-  requirements  Requirement[]
-  evidenceFiles EvidenceFile[]
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  framework         Framework         @relation(fields: [frameworkId], references: [id])
+  requirements      Requirement[]
+  evidenceFiles     EvidenceFile[]
+  violations        Violation[]
+  remediationTasks  RemediationTask[]
 
   @@unique([frameworkId, code])
   @@index([organizationId, frameworkId])
@@ -351,19 +375,20 @@ model Control {
 }
 
 model Requirement {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  frameworkId    String    @map("framework_id") @db.Uuid
-  controlId      String?   @map("control_id") @db.Uuid
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  frameworkId    String            @map("framework_id") @db.Uuid
+  controlId      String?           @map("control_id") @db.Uuid
   code           String
   title          String
   description    String?
-  legalBasisRef  String?   @map("legal_basis_ref")
-  createdBy      String?   @map("created_by") @db.Uuid
-  updatedBy      String?   @map("updated_by") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
+  legalBasisRef  String?           @map("legal_basis_ref")
+  status         RequirementStatus @default(NOT_STARTED)
+  createdBy      String?           @map("created_by") @db.Uuid
+  updatedBy      String?           @map("updated_by") @db.Uuid
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id])
   framework    Framework    @relation(fields: [frameworkId], references: [id])
@@ -457,6 +482,12 @@ model DataAsset {
 
   storageLocation String? @map("storage_location")
   retentionPeriod String? @map("retention_period")
+  source          DataAssetSource @default(MANUAL)
+  systemId        String?         @map("system_id") @db.Uuid
+  agentId         String?         @map("agent_id") @db.Uuid
+  fieldSchemaJson Json?           @map("field_schema_json")
+  piiTagsJson     Json?           @map("pii_tags_json")
+  lastDiscoveredAt DateTime?      @map("last_discovered_at")
 
   status DataAssetStatus @default(ACTIVE)
 
@@ -475,10 +506,16 @@ model DataAsset {
 
   processingActivities ProcessingActivity[]
   consentRecords       ConsentRecord[]
+  system               DataSystem? @relation(fields: [systemId], references: [id])
+  agent                Agent? @relation(fields: [agentId], references: [id])
+  dataFields           DataField[]
+  complianceFindings   ComplianceFinding[]
 
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([departmentId])
+  @@index([systemId])
+  @@index([agentId])
   @@map("data_assets")
 }
 
@@ -713,12 +750,18 @@ model ErasureChecklistItem {
   confirmedAt           DateTime?              @map("confirmed_at")
   confirmedBy           String?                @map("confirmed_by") @db.Uuid
   notes                 String?
+  agentTaskId           String?                @unique @map("agent_task_id") @db.Uuid
+  dispatchMode          ErasureDispatchMode    @default(MANUAL) @map("dispatch_mode")
+  executionProof        Json?                  @map("execution_proof")
+  rowsAffected          Int?                   @map("rows_affected")
+  failureReason         String?                @map("failure_reason") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   dataSubjectRequest DataSubjectRequest @relation(fields: [dataSubjectRequestId], references: [id])
   vendor             Vendor?            @relation(fields: [vendorId], references: [id])
+  agentTask          AgentTask?         @relation(fields: [agentTaskId], references: [id])
 
   @@unique([dataSubjectRequestId, systemKey])
   @@index([organizationId])
@@ -857,6 +900,7 @@ model DataSubjectRequest {
   assignee User? @relation("DataSubjectRequestAssignee", fields: [assignedTo], references: [id])
 
   erasureChecklistItems ErasureChecklistItem[]
+  agentTasks             AgentTask[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -882,6 +926,12 @@ enum RuleCategory {
   RETENTION
   RIGHTS
   VENDOR
+  SECURITY
+  BREACH
+  TRANSFER
+  CHILDREN
+  GOVERNANCE
+  PURPOSE
 }
 
 enum ValidationTriggerType {
@@ -1016,14 +1066,21 @@ model Violation {
 
   organizationId String @map("organization_id") @db.Uuid
 
-  validationResultId String?         @map("validation_result_id") @db.Uuid
+  validationResultId      String?         @map("validation_result_id") @db.Uuid
+  controlId               String?         @map("control_id") @db.Uuid
+  assessmentControlCode   String?         @map("assessment_control_code")
   /** Idempotency key e.g. assessment:{id}:v{n}:{controlCode} */
-  sourceKey          String?         @map("source_key")
-  severity           RuleSeverity
-  title              String
-  description        String?
-  status             ViolationStatus @default(OPEN)
-  assignedTo         String?         @map("assigned_to") @db.Uuid
+  sourceKey               String?         @map("source_key")
+  findingSource           FindingSource   @default(VALIDATION) @map("finding_source")
+  dedupeKey               String?         @map("dedupe_key")
+  complianceFindingId     String?         @map("compliance_finding_id") @db.Uuid
+  agentId                 String?         @map("agent_id") @db.Uuid
+  assessmentId            String?         @map("assessment_id") @db.Uuid
+  severity                RuleSeverity
+  title                   String
+  description             String?
+  status                  ViolationStatus @default(OPEN)
+  assignedTo              String?         @map("assigned_to") @db.Uuid
 
   openedAt DateTime  @default(now()) @map("opened_at")
   dueAt    DateTime? @map("due_at")
@@ -1044,6 +1101,10 @@ model Violation {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   validationResult ValidationResult? @relation(fields: [validationResultId], references: [id])
+  control          Control?          @relation(fields: [controlId], references: [id])
+  complianceFinding ComplianceFinding? @relation(fields: [complianceFindingId], references: [id])
+  agent            Agent?             @relation(fields: [agentId], references: [id])
+  assessment       Assessment?        @relation(fields: [assessmentId], references: [id])
 
   assignee User? @relation("ViolationAssignee", fields: [assignedTo], references: [id])
 
@@ -1053,7 +1114,12 @@ model Violation {
   @@unique([organizationId, validationResultId])
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([controlId])
   @@index([assignedTo])
+  @@index([organizationId, findingSource, dedupeKey])
+  @@index([complianceFindingId])
+  @@index([agentId])
+  @@index([assessmentId])
   @@map("violations")
 }
 
@@ -1080,6 +1146,7 @@ model RemediationTask {
 
   organizationId String @map("organization_id") @db.Uuid
   violationId    String @map("violation_id") @db.Uuid
+  controlId      String? @map("control_id") @db.Uuid
 
   /**
    * AUTO = created from a ViolationCreated event; MANUAL = user-created.
@@ -1110,6 +1177,7 @@ model RemediationTask {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   violation    Violation    @relation(fields: [violationId], references: [id])
+  control      Control?     @relation(fields: [controlId], references: [id])
   assignee     User?        @relation("RemediationTaskAssignee", fields: [assignedTo], references: [id])
 
   // NOTE: the at-most-one-AUTO-task-per-violation invariant is enforced by a
@@ -1424,6 +1492,7 @@ model Assessment {
   controlResults AssessmentControlResult[]
   reports      AssessmentReport[]
   auditEvents  AssessmentAuditEvent[]
+  violations   Violation[]
 
   @@index([organizationId, status])
   @@map("assessments")
@@ -1562,22 +1631,24 @@ model CliFinding {
 }
 
 model AssessmentControlResult {
-  id             String            @id @default(uuid()) @db.Uuid
-  assessmentId   String            @map("assessment_id") @db.Uuid
-  organizationId String            @map("organization_id") @db.Uuid
-  versionNumber  Int               @map("version_number")
-  controlCode    String            @map("control_code")
-  status         ControlEvalStatus
-  severity       String            @default("MEDIUM")
-  reasoning      String            @db.Text
-  evidenceRefs   Json              @default("[]") @map("evidence_refs")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id                    String            @id @default(uuid()) @db.Uuid
+  assessmentId          String            @map("assessment_id") @db.Uuid
+  organizationId        String            @map("organization_id") @db.Uuid
+  versionNumber         Int               @map("version_number")
+  controlCode           String            @map("control_code")
+  frameworkControlCode  String?           @map("framework_control_code")
+  status                ControlEvalStatus
+  severity              String            @default("MEDIUM")
+  reasoning             String            @db.Text
+  evidenceRefs          Json              @default("[]") @map("evidence_refs")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
   @@unique([assessmentId, versionNumber, controlCode])
   @@index([organizationId])
+  @@index([frameworkControlCode])
   @@map("assessment_control_results")
 }
 
@@ -1618,4 +1689,424 @@ model AssessmentAuditEvent {
   @@index([assessmentId, createdAt])
   @@index([organizationId])
   @@map("assessment_audit_events")
+}
+
+// =============================================================================
+// Agent Control Plane
+// =============================================================================
+
+enum DeploymentTier {
+  COMMUNITY
+  ENTERPRISE
+  MANAGED
+}
+
+enum AgentState {
+  PENDING
+  ACTIVE
+  DEGRADED
+  OFFLINE
+  REVOKED
+}
+
+enum AgentTaskType {
+  DISCOVERY
+  DSR_ACCESS
+  DSR_CORRECTION
+  DSR_ERASURE
+  CONSENT_SNAPSHOT
+  COMPLIANCE_SCAN
+}
+
+enum AgentTaskStatus {
+  PENDING
+  DISPATCHED
+  ACKNOWLEDGED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+  ESCALATED
+}
+
+enum FindingSource {
+  AGENT
+  ASSESSMENT
+  VALIDATION
+  MANUAL
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum DataAssetSource {
+  MANUAL
+  AGENT
+  IMPORT
+}
+
+enum ErasureDispatchMode {
+  MANUAL
+  AGENT
+  WEBHOOK
+}
+
+enum LedgerActorType {
+  USER
+  AGENT
+  SYSTEM
+}
+
+model OrganizationControlPlaneSettings {
+  id                    String         @id @default(uuid()) @db.Uuid
+  organizationId        String         @unique @map("organization_id") @db.Uuid
+  deploymentTier        DeploymentTier @default(COMMUNITY) @map("deployment_tier")
+  agentMtlsRequired     Boolean        @default(false) @map("agent_mtls_required")
+  discoveryEnabled      Boolean        @default(true) @map("discovery_enabled")
+  dsrDispatchEnabled    Boolean        @default(false) @map("dsr_dispatch_enabled")
+  consentSyncEnabled    Boolean        @default(false) @map("consent_sync_enabled")
+  scopeProfileJson      Json?          @map("scope_profile_json")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("organization_control_plane_settings")
+}
+
+model AgentEnrollmentToken {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  tokenHash        String    @unique @map("token_hash")
+  tokenPrefix      String    @map("token_prefix")
+  label            String?
+  scopeProfileJson Json?     @map("scope_profile_json")
+  maxUses          Int       @default(1) @map("max_uses")
+  useCount         Int       @default(0) @map("use_count")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  lastUsedAt       DateTime? @map("last_used_at")
+  createdBy        String?   @map("created_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  agents      Agent[]
+
+  @@index([organizationId, expiresAt])
+  @@map("agent_enrollment_tokens")
+}
+
+model Agent {
+  id                String     @id @default(uuid()) @db.Uuid
+  organizationId    String     @map("organization_id") @db.Uuid
+  enrollmentTokenId String?    @map("enrollment_token_id") @db.Uuid
+  name              String
+  state             AgentState @default(PENDING)
+  agentVersion      String     @map("agent_version")
+  instanceKey       String     @map("instance_key")
+  platform          String?
+  hostname          String?
+  capabilitiesJson  Json?      @map("capabilities_json")
+  scopeProfileJson  Json?      @map("scope_profile_json")
+  metadataJson      Json?      @map("metadata_json")
+  enrolledAt        DateTime   @default(now()) @map("enrolled_at")
+  lastHeartbeatAt   DateTime?  @map("last_heartbeat_at")
+  revokedAt         DateTime?  @map("revoked_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  enrollmentToken AgentEnrollmentToken? @relation(fields: [enrollmentTokenId], references: [id])
+  certificates    AgentCertificate[]
+  tasks           AgentTask[]
+  dataSystems     DataSystem[]
+  dataAssets      DataAsset[]
+  catalogRevisions CatalogRevision[]
+  complianceFindings ComplianceFinding[]
+  violations      Violation[]
+
+  @@unique([organizationId, instanceKey])
+  @@index([organizationId, state])
+  @@index([lastHeartbeatAt])
+  @@map("agents")
+}
+
+model AgentCertificate {
+  id              String    @id @default(uuid()) @db.Uuid
+  agentId         String    @map("agent_id") @db.Uuid
+  serialNumber    String    @unique @map("serial_number")
+  fingerprintSha256 String  @unique @map("fingerprint_sha256")
+  certificatePem  String    @map("certificate_pem") @db.Text
+  issuedAt        DateTime  @default(now()) @map("issued_at")
+  expiresAt       DateTime  @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  replacedById    String?   @map("replaced_by_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  agent      Agent             @relation(fields: [agentId], references: [id])
+  replacedBy AgentCertificate? @relation("CertificateRotation", fields: [replacedById], references: [id])
+  replaces   AgentCertificate[] @relation("CertificateRotation")
+
+  @@index([agentId, expiresAt])
+  @@map("agent_certificates")
+}
+
+model AgentTask {
+  id                   String          @id @default(uuid()) @db.Uuid
+  organizationId       String          @map("organization_id") @db.Uuid
+  agentId               String          @map("agent_id") @db.Uuid
+  dataSubjectRequestId  String?         @map("data_subject_request_id") @db.Uuid
+  type                   AgentTaskType
+  status                 AgentTaskStatus @default(PENDING)
+  dedupeKey              String          @map("dedupe_key")
+  payloadJson            Json            @map("payload_json")
+  resultJson             Json?           @map("result_json")
+  failureReason          String?         @map("failure_reason") @db.Text
+  attemptCount           Int             @default(0) @map("attempt_count")
+  availableAt            DateTime        @default(now()) @map("available_at")
+  dispatchedAt           DateTime?       @map("dispatched_at")
+  acknowledgedAt         DateTime?       @map("acknowledged_at")
+  completedAt            DateTime?       @map("completed_at")
+  expiresAt              DateTime?       @map("expires_at")
+  requestedBy            String?         @map("requested_by") @db.Uuid
+  correlationId          String?         @map("correlation_id")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  agent              Agent               @relation(fields: [agentId], references: [id])
+  dataSubjectRequest DataSubjectRequest? @relation(fields: [dataSubjectRequestId], references: [id])
+  erasureChecklistItem ErasureChecklistItem?
+
+  @@unique([organizationId, dedupeKey])
+  @@index([agentId, status, availableAt])
+  @@index([dataSubjectRequestId])
+  @@map("agent_tasks")
+}
+
+model DataSystem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  agentId            String   @map("agent_id") @db.Uuid
+  externalId         String   @map("external_id")
+  name               String
+  systemType         String   @map("system_type")
+  connectorKey       String?  @map("connector_key")
+  environment        String?
+  location           String?
+  metadataJson       Json?    @map("metadata_json")
+  firstDiscoveredAt  DateTime @default(now()) @map("first_discovered_at")
+  lastDiscoveredAt   DateTime @default(now()) @map("last_discovered_at")
+  deletedAt          DateTime? @map("deleted_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  agent              Agent              @relation(fields: [agentId], references: [id])
+  dataAssets         DataAsset[]
+  dataFields         DataField[]
+  identityGraphEdges IdentityGraphEdge[]
+  complianceFindings ComplianceFinding[]
+
+  @@unique([organizationId, agentId, externalId])
+  @@index([organizationId, systemType])
+  @@map("data_systems")
+}
+
+model DataField {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  systemId          String   @map("system_id") @db.Uuid
+  dataAssetId       String?  @map("data_asset_id") @db.Uuid
+  externalId        String   @map("external_id")
+  name              String
+  path              String?
+  dataType          String?  @map("data_type")
+  nullable          Boolean?
+  pii               Boolean  @default(false)
+  piiCategory       String?  @map("pii_category")
+  confidence        Float?
+  tagsJson          Json?    @map("tags_json")
+  metadataJson      Json?    @map("metadata_json")
+  firstDiscoveredAt DateTime @default(now()) @map("first_discovered_at")
+  lastDiscoveredAt  DateTime @default(now()) @map("last_discovered_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  system       DataSystem   @relation(fields: [systemId], references: [id])
+  dataAsset    DataAsset?   @relation(fields: [dataAssetId], references: [id])
+
+  @@unique([systemId, externalId])
+  @@index([organizationId, pii])
+  @@index([dataAssetId])
+  @@map("data_fields")
+}
+
+model CatalogRevision {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  agentId           String   @map("agent_id") @db.Uuid
+  revision          Int
+  schemaVersion     String   @map("schema_version")
+  reportHash        String   @map("report_hash")
+  reportJson        Json     @map("report_json")
+  summaryJson       Json?    @map("summary_json")
+  discoveredAt      DateTime @map("discovered_at")
+  receivedAt        DateTime @default(now()) @map("received_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  agent              Agent               @relation(fields: [agentId], references: [id])
+  complianceFindings ComplianceFinding[]
+
+  @@unique([agentId, revision])
+  @@unique([agentId, reportHash])
+  @@index([organizationId, receivedAt])
+  @@map("catalog_revisions")
+}
+
+model IdentityGraphEdge {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  systemId           String   @map("system_id") @db.Uuid
+  sourceIdentityHash String   @map("source_identity_hash")
+  targetIdentityHash String   @map("target_identity_hash")
+  edgeType           String   @map("edge_type")
+  confidence         Float?
+  evidenceJson       Json?    @map("evidence_json")
+  firstSeenAt        DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt         DateTime @default(now()) @map("last_seen_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  system       DataSystem   @relation(fields: [systemId], references: [id])
+
+  @@unique([organizationId, systemId, sourceIdentityHash, targetIdentityHash, edgeType])
+  @@index([organizationId, sourceIdentityHash])
+  @@index([organizationId, targetIdentityHash])
+  @@map("identity_graph_edges")
+}
+
+model ComplianceFinding {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @map("organization_id") @db.Uuid
+  agentId           String?         @map("agent_id") @db.Uuid
+  systemId          String?         @map("system_id") @db.Uuid
+  dataAssetId       String?         @map("data_asset_id") @db.Uuid
+  catalogRevisionId String?         @map("catalog_revision_id") @db.Uuid
+  source            FindingSource
+  sourceKey         String?         @map("source_key")
+  dedupeKey         String          @map("dedupe_key")
+  ruleCode          String          @map("rule_code")
+  title             String
+  description       String?         @db.Text
+  severity          FindingSeverity
+  status            FindingStatus   @default(OPEN)
+  evidenceJson      Json?           @map("evidence_json")
+  firstSeenAt       DateTime        @default(now()) @map("first_seen_at")
+  lastSeenAt        DateTime        @default(now()) @map("last_seen_at")
+  resolvedAt        DateTime?       @map("resolved_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  agent           Agent?           @relation(fields: [agentId], references: [id])
+  system          DataSystem?      @relation(fields: [systemId], references: [id])
+  dataAsset       DataAsset?       @relation(fields: [dataAssetId], references: [id])
+  catalogRevision CatalogRevision? @relation(fields: [catalogRevisionId], references: [id])
+  violations      Violation[]
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, status, severity])
+  @@index([agentId])
+  @@index([systemId])
+  @@index([dataAssetId])
+  @@map("compliance_findings")
+}
+
+model EvidenceLedgerEntry {
+  id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @map("organization_id") @db.Uuid
+  sequence        BigInt
+  actorType       LedgerActorType @map("actor_type")
+  actorId         String?         @map("actor_id")
+  action          String
+  entityType      String          @map("entity_type")
+  entityId        String          @map("entity_id")
+  payloadHash     String          @map("payload_hash")
+  previousHash    String?         @map("previous_hash")
+  entryHash       String          @map("entry_hash")
+  signature       String?         @db.Text
+  metadataJson    Json?           @map("metadata_json")
+  occurredAt      DateTime        @map("occurred_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, sequence])
+  @@unique([organizationId, entryHash])
+  @@index([organizationId, entityType, entityId])
+  @@map("evidence_ledger_entries")
+}
+
+model Plugin {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String?  @map("organization_id") @db.Uuid
+  pluginKey       String   @map("plugin_key")
+  version         String
+  name            String
+  description     String?
+  manifestJson    Json     @map("manifest_json")
+  artifactUri     String   @map("artifact_uri")
+  artifactSha256  String   @map("artifact_sha256")
+  signature       String   @db.Text
+  enabled         Boolean  @default(true)
+  publishedAt     DateTime @default(now()) @map("published_at")
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, pluginKey, version])
+  @@index([pluginKey, version])
+  @@map("plugins")
+}
+
+model Rulepack {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String?  @map("organization_id") @db.Uuid
+  rulepackKey     String   @map("rulepack_key")
+  version         String
+  name            String
+  framework       String?
+  manifestJson    Json     @map("manifest_json")
+  rulesJson       Json     @map("rules_json")
+  contentSha256   String   @map("content_sha256")
+  signature       String   @db.Text
+  enabled         Boolean  @default(true)
+  publishedAt     DateTime @default(now()) @map("published_at")
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, rulepackKey, version])
+  @@index([rulepackKey, version])
+  @@map("rulepacks")
 }

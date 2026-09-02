@@ -3,13 +3,19 @@
  * Filters are applied in selectTemplatesForProfile — keep codes stable.
  */
 
+import { DPDP_CHILD_AGE_THRESHOLD } from "../../../shared/domain/dpdp.constants.js";
+
 export type MaturityLevel = "basic" | "intermediate" | "advanced";
 export type DataSensitivity = "low" | "medium" | "high";
-export type RoadmapPhase =
-  | "Foundation"
-  | "Operations"
-  | "Oversight"
-  | "Significant Fiduciary";
+export type CompanySize = "small" | "medium" | "large";
+
+export type RoadmapPhase = "Foundation" | "Operations" | "Governance";
+
+export const ROADMAP_PHASE_ORDER: readonly RoadmapPhase[] = [
+  "Foundation",
+  "Operations",
+  "Governance",
+];
 
 export type RequirementTemplate = {
   code: string;
@@ -24,17 +30,26 @@ export type ControlTemplate = {
   description: string;
   legalBasisRef: string;
   phase: RoadmapPhase;
-  /** Days after generation when the control is due. */
+  /** Base days after generation when the control is due (risk-adjusted by calculator). */
   dueDaysFromGenerate: number;
   requirementCodes: readonly string[];
-  /** Include for all profiles when true (default). */
+  /** Include for all profiles when true. */
   always?: boolean;
+  /** SDF-only control — overlaid on phase, not a separate phase. */
   requiresSdf?: boolean;
+  /** Marks control as SDF-additional for board reporting. */
+  sdfOverlay?: boolean;
   minMaturity?: MaturityLevel;
   industries?: readonly string[];
   minDepartmentCount?: number;
   requiresProcessors?: boolean;
   minSensitivity?: DataSensitivity;
+  /** Include when org processes children's data (under 18). */
+  requiresChildrenData?: boolean;
+  /** Include when org transfers data outside India. */
+  requiresCrossBorder?: boolean;
+  /** NIST Privacy Framework optional controls. */
+  nistOptional?: boolean;
 };
 
 export type FrameworkProfile = {
@@ -44,6 +59,10 @@ export type FrameworkProfile = {
   departmentCount: number;
   processorCount: number;
   isSdf: boolean;
+  processesChildrenData: boolean;
+  crossBorderTransfers: boolean;
+  companySize?: CompanySize;
+  includeNistControls?: boolean;
 };
 
 const MATURITY_RANK: Record<MaturityLevel, number> = {
@@ -78,6 +97,13 @@ export const REQUIREMENT_TEMPLATES: readonly RequirementTemplate[] = [
     legalBasisRef: "DPDP Act 2023 s.6(4)",
   },
   {
+    code: "REQ-CONSENT-MGR-01",
+    title: "Consent Manager readiness",
+    description:
+      "Prepare for Consent Manager integration per DPDP Rule 4 — registered intermediary support.",
+    legalBasisRef: "DPDP Rules 2025 Rule 4",
+  },
+  {
     code: "REQ-PURPOSE-01",
     title: "Purpose limitation",
     description: "Process personal data only for the stated lawful purpose.",
@@ -90,9 +116,30 @@ export const REQUIREMENT_TEMPLATES: readonly RequirementTemplate[] = [
     legalBasisRef: "DPDP Act 2023 s.8(7)",
   },
   {
+    code: "REQ-AUTO-DELETE-01",
+    title: "Automated erasure on purpose expiry",
+    description:
+      "Implement automated deletion when purpose expires, with 48-hour advance notice to data principals.",
+    legalBasisRef: "DPDP Rules 2025 Rule 8",
+  },
+  {
     code: "REQ-SECURITY-01",
     title: "Security safeguards",
     description: "Implement reasonable security safeguards to prevent breaches.",
+    legalBasisRef: "DPDP Act 2023 s.8(5)",
+  },
+  {
+    code: "REQ-BREACH-01",
+    title: "72-hour breach notification",
+    description:
+      "Notify the Data Protection Board of India and affected individuals within 72 hours of becoming aware of a breach.",
+    legalBasisRef: "DPDP Rules 2025 Rule 7",
+  },
+  {
+    code: "REQ-BREACH-02",
+    title: "Breach detection and response runbook",
+    description:
+      "Maintain breach detection capability and a documented incident response runbook.",
     legalBasisRef: "DPDP Act 2023 s.8(5)",
   },
   {
@@ -102,9 +149,23 @@ export const REQUIREMENT_TEMPLATES: readonly RequirementTemplate[] = [
     legalBasisRef: "DPDP Act 2023 ss.11-13",
   },
   {
+    code: "REQ-RIGHTS-SLA-01",
+    title: "30-day rights response SLA",
+    description:
+      "Track and fulfill data principal rights requests within the mandated 30-day response period.",
+    legalBasisRef: "DPDP Rules 2025 — rights response timeline",
+  },
+  {
+    code: "REQ-GRIEVANCE-01",
+    title: "Grievance officer appointment",
+    description:
+      "Appoint a grievance officer and publish their name and contact details.",
+    legalBasisRef: "DPDP Act 2023 s.8(6)",
+  },
+  {
     code: "REQ-CHILDREN-01",
     title: "Children's data verifiable consent",
-    description: "Obtain verifiable consent of parent/guardian before processing children's data.",
+    description: `Obtain verifiable consent of parent/guardian before processing data of children (under ${DPDP_CHILD_AGE_THRESHOLD}).`,
     legalBasisRef: "DPDP Act 2023 s.9",
   },
   {
@@ -149,6 +210,49 @@ export const REQUIREMENT_TEMPLATES: readonly RequirementTemplate[] = [
     description: "Train staff who handle personal data on DPDP obligations.",
     legalBasisRef: "DPDP Act 2023 s.8 — accountability",
   },
+  // NIST-aligned optional requirements
+  {
+    code: "REQ-DATA-FLOWS-01",
+    title: "Data flow mapping",
+    description: "Document data flows, processing environments, and data elements.",
+    legalBasisRef: "NIST Privacy Framework — Identify-P",
+  },
+  {
+    code: "REQ-GOV-POLICY-01",
+    title: "Privacy governance policy",
+    description: "Establish a formal privacy governance policy approved by leadership.",
+    legalBasisRef: "NIST Privacy Framework — Govern-P",
+  },
+  {
+    code: "REQ-RISK-REGISTER-01",
+    title: "Privacy risk register",
+    description: "Maintain a privacy risk management strategy and register.",
+    legalBasisRef: "NIST Privacy Framework — Govern-P",
+  },
+  {
+    code: "REQ-PROCESSING-AWARENESS-01",
+    title: "Data processing awareness",
+    description: "Ensure staff are aware of data processing activities relevant to their role.",
+    legalBasisRef: "NIST Privacy Framework — Communicate-P",
+  },
+  {
+    code: "REQ-AUTH-STANDARDS-01",
+    title: "Authentication standards",
+    description: "Define and enforce authentication standards for systems processing personal data.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+  },
+  {
+    code: "REQ-ACCESS-CONTROL-01",
+    title: "Access control program",
+    description: "Implement role-based access control for personal data systems.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+  },
+  {
+    code: "REQ-ENCRYPTION-01",
+    title: "Encryption standards",
+    description: "Apply encryption standards for personal data at rest and in transit.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+  },
 ] as const;
 
 export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
@@ -173,6 +277,17 @@ export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
     always: true,
   },
   {
+    code: "CTRL-CONSENT-MGR",
+    title: "Consent Manager integration",
+    description:
+      "Prepare for Consent Manager intermediary integration per DPDP Rule 4.",
+    legalBasisRef: "DPDP Rules 2025 Rule 4",
+    phase: "Foundation",
+    dueDaysFromGenerate: 60,
+    requirementCodes: ["REQ-CONSENT-MGR-01"],
+    always: true,
+  },
+  {
     code: "CTRL-PURPOSE",
     title: "Purpose limitation controls",
     description: "Ensure processing stays within documented lawful purposes.",
@@ -193,6 +308,17 @@ export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
     always: true,
   },
   {
+    code: "CTRL-SDF-DPO",
+    title: "Appoint Data Protection Officer",
+    description: "Designate an India-based DPO for Significant Data Fiduciary duties.",
+    legalBasisRef: "DPDP Act 2023 s.10(2)(a)",
+    phase: "Foundation",
+    dueDaysFromGenerate: 30,
+    requirementCodes: ["REQ-DPO-01"],
+    requiresSdf: true,
+    sdfOverlay: true,
+  },
+  {
     code: "CTRL-SECURITY",
     title: "Security safeguards",
     description: "Apply access control, encryption, logging, and breach readiness.",
@@ -200,6 +326,17 @@ export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
     phase: "Operations",
     dueDaysFromGenerate: 60,
     requirementCodes: ["REQ-SECURITY-01"],
+    always: true,
+  },
+  {
+    code: "CTRL-BREACH",
+    title: "Breach notification program",
+    description:
+      "Operate breach detection and 72-hour notification to DPBI and affected individuals.",
+    legalBasisRef: "DPDP Rules 2025 Rule 7",
+    phase: "Operations",
+    dueDaysFromGenerate: 45,
+    requirementCodes: ["REQ-BREACH-01", "REQ-BREACH-02"],
     always: true,
   },
   {
@@ -213,35 +350,46 @@ export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
     always: true,
   },
   {
+    code: "CTRL-AUTO-DELETE",
+    title: "Automated deletion workflows",
+    description:
+      "Implement automated erasure when purpose expires with 48-hour advance notice.",
+    legalBasisRef: "DPDP Rules 2025 Rule 8",
+    phase: "Operations",
+    dueDaysFromGenerate: 90,
+    requirementCodes: ["REQ-AUTO-DELETE-01"],
+    always: true,
+  },
+  {
     code: "CTRL-RIGHTS",
     title: "Data principal rights desk",
     description: "Operate an SLA-tracked rights request intake and fulfillment process.",
     legalBasisRef: "DPDP Act 2023 ss.11-13",
     phase: "Operations",
     dueDaysFromGenerate: 45,
-    requirementCodes: ["REQ-RIGHTS-01"],
+    requirementCodes: ["REQ-RIGHTS-01", "REQ-RIGHTS-SLA-01"],
     always: true,
   },
   {
-    code: "CTRL-TRAINING",
-    title: "Privacy awareness training",
-    description: "Deliver role-based DPDP training and track completion.",
-    legalBasisRef: "DPDP Act 2023 s.8 — accountability",
-    phase: "Oversight",
-    dueDaysFromGenerate: 90,
-    requirementCodes: ["REQ-TRAINING-01"],
-    minMaturity: "intermediate",
+    code: "CTRL-GRIEVANCE",
+    title: "Grievance officer program",
+    description:
+      "Appoint a grievance officer and publish contact details for data principals.",
+    legalBasisRef: "DPDP Act 2023 s.8(6)",
+    phase: "Operations",
+    dueDaysFromGenerate: 30,
+    requirementCodes: ["REQ-GRIEVANCE-01"],
+    always: true,
   },
   {
     code: "CTRL-CHILDREN",
     title: "Children's data protections",
-    description: "Gate children's data processing behind verifiable parental consent.",
+    description: `Gate processing of children's data (under ${DPDP_CHILD_AGE_THRESHOLD}) behind verifiable parental consent.`,
     legalBasisRef: "DPDP Act 2023 s.9",
     phase: "Operations",
     dueDaysFromGenerate: 60,
     requirementCodes: ["REQ-CHILDREN-01"],
-    industries: ["education", "healthcare", "gaming", "social"],
-    minSensitivity: "medium",
+    requiresChildrenData: true,
   },
   {
     code: "CTRL-PROCESSOR",
@@ -258,41 +406,120 @@ export const CONTROL_TEMPLATES: readonly ControlTemplate[] = [
     title: "Cross-border transfer governance",
     description: "Assess and control transfers of personal data outside India.",
     legalBasisRef: "DPDP Act 2023 s.16",
-    phase: "Oversight",
-    dueDaysFromGenerate: 90,
+    phase: "Operations",
+    dueDaysFromGenerate: 60,
     requirementCodes: ["REQ-TRANSFER-01"],
-    minMaturity: "intermediate",
-    minSensitivity: "high",
+    requiresCrossBorder: true,
   },
   {
-    code: "CTRL-SDF-DPO",
-    title: "Appoint Data Protection Officer",
-    description: "Designate an India-based DPO for Significant Data Fiduciary duties.",
-    legalBasisRef: "DPDP Act 2023 s.10(2)(a)",
-    phase: "Significant Fiduciary",
-    dueDaysFromGenerate: 30,
-    requirementCodes: ["REQ-DPO-01"],
-    requiresSdf: true,
+    code: "CTRL-TRAINING",
+    title: "Privacy awareness training",
+    description: "Deliver role-based DPDP training and track completion.",
+    legalBasisRef: "DPDP Act 2023 s.8 — accountability",
+    phase: "Governance",
+    dueDaysFromGenerate: 90,
+    requirementCodes: ["REQ-TRAINING-01"],
+    minMaturity: "intermediate",
   },
   {
     code: "CTRL-SDF-AUDIT",
     title: "Independent data audit",
     description: "Schedule and complete independent data protection audits.",
     legalBasisRef: "DPDP Act 2023 s.10(2)(b)",
-    phase: "Significant Fiduciary",
+    phase: "Governance",
     dueDaysFromGenerate: 120,
     requirementCodes: ["REQ-AUDIT-01"],
     requiresSdf: true,
+    sdfOverlay: true,
   },
   {
     code: "CTRL-SDF-DPIA",
     title: "DPIA for high-risk processing",
     description: "Perform and maintain DPIAs for high-risk activities.",
     legalBasisRef: "DPDP Act 2023 s.10(2)(c)",
-    phase: "Significant Fiduciary",
+    phase: "Governance",
     dueDaysFromGenerate: 90,
     requirementCodes: ["REQ-DPIA-01"],
     requiresSdf: true,
+    sdfOverlay: true,
+  },
+  // NIST-aligned optional controls
+  {
+    code: "CTRL-DATA-FLOWS",
+    title: "Data flow mapping",
+    description: "Document end-to-end data flows and processing environments.",
+    legalBasisRef: "NIST Privacy Framework — Identify-P",
+    phase: "Foundation",
+    dueDaysFromGenerate: 75,
+    requirementCodes: ["REQ-DATA-FLOWS-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-GOV-POLICY",
+    title: "Privacy governance policy",
+    description: "Establish and maintain a formal privacy governance policy.",
+    legalBasisRef: "NIST Privacy Framework — Govern-P",
+    phase: "Governance",
+    dueDaysFromGenerate: 60,
+    requirementCodes: ["REQ-GOV-POLICY-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-RISK-REGISTER",
+    title: "Privacy risk register",
+    description: "Maintain a privacy risk management strategy and register.",
+    legalBasisRef: "NIST Privacy Framework — Govern-P",
+    phase: "Governance",
+    dueDaysFromGenerate: 75,
+    requirementCodes: ["REQ-RISK-REGISTER-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-PROCESSING-AWARENESS",
+    title: "Data processing awareness",
+    description: "Ensure staff awareness of data processing relevant to their role.",
+    legalBasisRef: "NIST Privacy Framework — Communicate-P",
+    phase: "Governance",
+    dueDaysFromGenerate: 90,
+    requirementCodes: ["REQ-PROCESSING-AWARENESS-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-AUTH-STANDARDS",
+    title: "Authentication standards",
+    description: "Define and enforce authentication standards for personal data systems.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+    phase: "Operations",
+    dueDaysFromGenerate: 60,
+    requirementCodes: ["REQ-AUTH-STANDARDS-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-ACCESS-CONTROL",
+    title: "Access control program",
+    description: "Implement role-based access control for personal data.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+    phase: "Operations",
+    dueDaysFromGenerate: 60,
+    requirementCodes: ["REQ-ACCESS-CONTROL-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
+  },
+  {
+    code: "CTRL-ENCRYPTION",
+    title: "Encryption standards",
+    description: "Apply encryption for personal data at rest and in transit.",
+    legalBasisRef: "NIST Privacy Framework — Protect-P",
+    phase: "Operations",
+    dueDaysFromGenerate: 60,
+    requirementCodes: ["REQ-ENCRYPTION-01"],
+    nistOptional: true,
+    minMaturity: "intermediate",
   },
 ] as const;
 
@@ -309,8 +536,11 @@ export function selectTemplatesForProfile(
   const sensitivityRank = SENSITIVITY_RANK[profile.dataSensitivity];
 
   const controls = CONTROL_TEMPLATES.filter((tpl) => {
+    if (tpl.nistOptional && !profile.includeNistControls) return false;
     if (tpl.requiresSdf && !profile.isSdf) return false;
     if (tpl.requiresProcessors && profile.processorCount < 1) return false;
+    if (tpl.requiresChildrenData && !profile.processesChildrenData) return false;
+    if (tpl.requiresCrossBorder && !profile.crossBorderTransfers) return false;
     if (
       tpl.minDepartmentCount !== undefined &&
       profile.departmentCount < tpl.minDepartmentCount
@@ -328,8 +558,12 @@ export function selectTemplatesForProfile(
     }
     if (tpl.industries && tpl.industries.length > 0) {
       const allowed = tpl.industries.map((i) => i.toLowerCase());
-      if (!allowed.includes(industry)) return false;
+      if (!allowed.includes(industry) && !profile.processesChildrenData) {
+        return false;
+      }
     }
+    if (tpl.always) return true;
+    // Non-always controls without explicit gates pass if no exclusion fired above
     return true;
   });
 
@@ -350,29 +584,22 @@ export function buildRoadmapJson(input: {
     title: string;
     phase: RoadmapPhase;
     dueAt: string;
+    sdfOverlay?: boolean;
   }>;
   requirementCount: number;
   generatedAt: string;
 }): Record<string, unknown> {
-  const phases = (
-    [
-      "Foundation",
-      "Operations",
-      "Oversight",
-      "Significant Fiduciary",
-    ] as const
-  )
-    .map((name) => ({
-      name,
-      controls: input.controls
-        .filter((c) => c.phase === name)
-        .map((c) => ({
-          code: c.code,
-          title: c.title,
-          dueAt: c.dueAt,
-        })),
-    }))
-    .filter((p) => p.controls.length > 0);
+  const phases = ROADMAP_PHASE_ORDER.map((name) => ({
+    name,
+    controls: input.controls
+      .filter((c) => c.phase === name)
+      .map((c) => ({
+        code: c.code,
+        title: c.title,
+        dueAt: c.dueAt,
+        ...(c.sdfOverlay ? { sdfOverlay: true } : {}),
+      })),
+  })).filter((p) => p.controls.length > 0);
 
   return {
     generatedAt: input.generatedAt,
@@ -382,6 +609,7 @@ export function buildRoadmapJson(input: {
       requirementCount: input.requirementCount,
       isSdf: input.profile.isSdf,
       phaseCount: phases.length,
+      sdfOverlayCount: input.controls.filter((c) => c.sdfOverlay).length,
     },
     phases,
   };

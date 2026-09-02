@@ -98,5 +98,23 @@ export function createDataSubjectRequestRouter(): Router {
       void dataSubjectRequestController.completeErasure(req, res, next),
   );
 
+  router.get(
+    "/:id/erasure-saga-status",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.read),
+    validateParams(dataSubjectRequestIdParamSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.getErasureSagaStatus(req, res, next),
+  );
+
+  router.post(
+    "/:id/erasure-dispatch-agents",
+    authenticate,
+    requirePermission(dataSubjectRequestPermissions.update),
+    validateParams(dataSubjectRequestIdParamSchema),
+    (req, res, next) =>
+      void dataSubjectRequestController.dispatchErasureAgents(req, res, next),
+  );
+
   return router;
 }

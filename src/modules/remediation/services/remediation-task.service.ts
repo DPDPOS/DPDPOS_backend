@@ -124,6 +124,7 @@ export class RemediationTaskService {
       try {
         task = await this.repository.create(tx, ctx, {
           violationId: payload.violationId,
+          controlId: violation.controlId ?? undefined,
           source: "AUTO",
           taskTitle: title,
         });

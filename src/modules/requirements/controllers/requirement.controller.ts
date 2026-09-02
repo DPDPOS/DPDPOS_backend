@@ -9,6 +9,7 @@ import type {
   CreateRequirementDto,
   ListRequirementsQuery,
   MapRequirementDto,
+  UpdateRequirementDto,
 } from "../dto/requirement.dto.js";
 import { requirementService } from "../services/requirement.service.js";
 
@@ -31,6 +32,51 @@ export class RequirementController {
       const body = req.body as CreateRequirementDto;
       const requirement = await requirementService.create(ctx, body);
       sendSuccess(res, requirement, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getById(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const requirement = await requirementService.getById(ctx, id);
+      sendSuccess(res, requirement);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async update(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const body = req.body as UpdateRequirementDto;
+      const requirement = await requirementService.update(ctx, id, body);
+      sendSuccess(res, requirement);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async delete(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const requirement = await requirementService.delete(ctx, id);
+      sendSuccess(res, requirement);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getEvidence(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const evidence = await requirementService.getEvidence(ctx, id);
+      sendSuccess(res, evidence);
     } catch (err) {
       next(err);
     }

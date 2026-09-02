@@ -27,8 +27,8 @@ export type SeedValidationRuleData = {
   ruleCode: string;
   title: string;
   description: string;
-  category: RuleCategory;
-  severity: RuleSeverity;
+  category: string;
+  severity: string;
 };
 
 export type UpdateValidationRuleData = {
@@ -151,8 +151,8 @@ export class ValidationRuleRepository extends BaseRepository {
         ruleCode: d.ruleCode,
         title: d.title,
         description: d.description,
-        category: d.category,
-        severity: d.severity,
+        category: d.category as RuleCategory,
+        severity: d.severity as RuleSeverity,
       })),
       skipDuplicates: true,
     });

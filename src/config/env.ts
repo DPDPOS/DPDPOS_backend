@@ -25,6 +25,17 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v !== "false"),
+  DEPLOYMENT_TIER: z.enum(["COMMUNITY", "ENTERPRISE", "MANAGED"]).default("COMMUNITY"),
+  AGENT_MTLS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  PLATFORM_CA_KEY_PATH: z.string().default("./certs/platform-ca.key"),
+  PLATFORM_CA_CERT_PATH: z.string().default("./certs/platform-ca.crt"),
+  PLUGIN_REGISTRY_S3_PREFIX: z.string().default("control-plane/plugins"),
+  AGENT_ENROLLMENT_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  AGENT_CERT_TTL_DAYS: z.coerce.number().int().positive().default(90),
+  CONSENT_INVALIDATION_CHANNEL: z.string().min(1).default("dpdpos:consent:invalidated"),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
   AI_API_KEY: z.string().optional(),
   AI_BASE_URL: z

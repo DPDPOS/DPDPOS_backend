@@ -11,6 +11,7 @@ import { ValidationRunRepository } from "../repositories/validation-run.reposito
 import { ValidationRuleRepository } from "../repositories/validation-rule.repository.js";
 import { ValidationResultRepository } from "../repositories/validation-result.repository.js";
 import { resolveEvaluator, defaultRuleDescriptors } from "../domain/rule.registry.js";
+import { frameworkCodeForRule } from "../domain/rule-control-map.js";
 import type {
   RuleEvaluationOutcome,
   ValidationRuleEvaluator,
@@ -27,6 +28,8 @@ type RuleEvaluation =
       score?: undefined;
       evidenceRequired?: undefined;
       controlId?: undefined;
+      entityType?: undefined;
+      entityId?: undefined;
     };
 import type { ValidationDataProvider } from "../interfaces/validation-data-provider.interface.js";
 import { PrismaValidationDataProvider } from "./validation-data.provider.js";
@@ -108,6 +111,9 @@ export class ValidationExecutionService {
         activeOnly: true,
       });
       const snapshot = await this.dataProvider.loadSnapshot(run.organizationId);
+      const controlIdByCode = new Map(
+        snapshot.controls.map((c) => [c.code, c.id] as const),
+      );
 
       // Evaluate all rules (pure — no DB inside evaluators).
       const evaluations = await Promise.all(
@@ -122,7 +128,11 @@ export class ValidationExecutionService {
           }
           try {
             const outcome = await evaluator.evaluate(snapshot);
-            return { rule, ...outcome };
+            const mappedCode = frameworkCodeForRule(rule.ruleCode);
+            const controlId =
+              outcome.controlId ??
+              (mappedCode ? controlIdByCode.get(mappedCode) : undefined);
+            return { rule, ...outcome, controlId };
           } catch (err) {
             logger.error(
               { err, runId, ruleCode: rule.ruleCode },
@@ -185,6 +195,8 @@ export class ValidationExecutionService {
                 severity: evalResult.rule.severity,
                 evidenceRequiredFlag: evalResult.evidenceRequired ?? false,
                 explanation: evalResult.explanation ?? "",
+                entityType: evalResult.entityType,
+                entityId: evalResult.entityId,
               },
             });
           }

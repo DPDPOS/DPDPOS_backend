@@ -9,6 +9,8 @@ export type OutboxWriteInput = {
   payload: Record<string, unknown>;
   actorUserId?: string;
   correlationId?: string;
+  ipAddress?: string;
+  userAgent?: string;
 };
 
 export type ClaimedOutboxEvent = {
@@ -31,12 +33,26 @@ export async function writeOutboxEvent(
   input: OutboxWriteInput,
 ): Promise<{ id: string }> {
   const id = randomUUID();
+  const { getRequestClientMeta } = await import(
+    "../../shared/middleware/correlation-id.middleware.js"
+  );
+  const fromStore = getRequestClientMeta();
+  const ipAddress = input.ipAddress ?? fromStore.ipAddress;
+  const userAgent = input.userAgent ?? fromStore.userAgent;
+
+  const payload: Record<string, unknown> = { ...input.payload };
+  if (ipAddress || userAgent) {
+    payload.__client = {
+      ...(ipAddress ? { ipAddress } : {}),
+      ...(userAgent ? { userAgent } : {}),
+    };
+  }
   await tx.outboxEvent.create({
     data: {
       id,
       eventType: input.eventType,
       organizationId: input.organizationId,
-      payload: input.payload as Prisma.InputJsonValue,
+      payload: payload as Prisma.InputJsonValue,
       actorUserId: input.actorUserId,
       correlationId: input.correlationId,
     },

@@ -84,9 +84,9 @@ export class ReportService {
       Key: row.storageKey,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-    
-    return { url };
+    const downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    return { downloadUrl };
   }
 
   async cancel(ctx: RequestContext, id: string) {

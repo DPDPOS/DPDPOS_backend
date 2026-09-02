@@ -76,3 +76,8 @@ volumes:
   dpdpos_pg_data:
   dpdpos_redis_data:
   dpdpos_minio_data:
+
+# Control Plane / Zone Agent local notes:
+# - Keep AGENT_MTLS_ENABLED=false for header-based agent auth in development.
+# - Enrollment tokens are issued via POST /api/v1/onboarding/intake.
+# - Agents dial out to the API (no inbound agent ports required on this compose file).

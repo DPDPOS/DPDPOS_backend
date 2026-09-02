@@ -18,6 +18,13 @@ export interface EvidenceCoverage {
   coveragePercent: number;
 }
 
+export interface RoadmapProgress {
+  overallProgressPercent: number;
+  overdueCount: number;
+  openViolationCount: number;
+  byPhase: Record<string, { total: number; progressPercent: number }>;
+}
+
 export interface RightsRequestMetrics {
   total: number;
   open: number;
@@ -36,6 +43,7 @@ export interface DashboardOverview {
   complianceScore: ComplianceScoreResult;
   violations: ViolationBreakdown;
   evidence: EvidenceCoverage;
+  roadmapProgress?: RoadmapProgress;
   rightsRequests: RightsRequestMetrics;
   consent: ConsentMetrics;
 }

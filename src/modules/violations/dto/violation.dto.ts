@@ -12,6 +12,10 @@ export const listViolationsQuerySchema = z.object({
   severity: z.enum(VIOLATION_SEVERITIES).optional(),
 
   assignedTo: z.string().uuid().optional(),
+
+  findingSource: z
+    .enum(["AGENT", "ASSESSMENT", "VALIDATION", "MANUAL"])
+    .optional(),
 });
 
 export const closeViolationBodySchema = z.object({

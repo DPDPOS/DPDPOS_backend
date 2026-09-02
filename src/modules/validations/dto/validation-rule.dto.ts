@@ -13,6 +13,12 @@ export const RULE_CATEGORIES = [
   "RETENTION",
   "RIGHTS",
   "VENDOR",
+  "SECURITY",
+  "BREACH",
+  "TRANSFER",
+  "CHILDREN",
+  "GOVERNANCE",
+  "PURPOSE",
 ] as const;
 
 export const createValidationRuleDtoSchema = z.object({

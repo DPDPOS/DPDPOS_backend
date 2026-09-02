@@ -15,6 +15,7 @@ import type {
 
 import { dataSubjectRequestService } from "../services/data-subject-request.service.js";
 import { erasureEvidenceService } from "../services/erasure-evidence.service.js";
+import { dsrSagaService } from "../../../control-plane/dsr-saga.service.js";
 
 export class DataSubjectRequestController {
   async submit(
@@ -161,6 +162,39 @@ export class DataSubjectRequestController {
       const { id } = req.params as { id: string };
       const evidence = await erasureEvidenceService.completeHardErase(ctx, id);
       sendSuccess(res, evidence);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async dispatchErasureAgents(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const result = await dsrSagaService.startAgentErasure(
+        ctx,
+        req.params.id as string,
+      );
+      sendSuccess(res, result, 202);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getErasureSagaStatus(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      sendSuccess(
+        res,
+        await dsrSagaService.getSagaStatus(ctx, req.params.id as string),
+      );
     } catch (err) {
       next(err);
     }

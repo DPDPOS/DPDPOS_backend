@@ -15,6 +15,7 @@ type DbClient = Prisma.TransactionClient | typeof prisma;
 
 export type CreateRemediationTaskData = {
   violationId: string;
+  controlId?: string;
   source: RemediationTaskSource;
   taskTitle: string;
   taskDescription?: string;
@@ -146,6 +147,7 @@ export class RemediationTaskRepository extends BaseRepository {
         organizationId: ctx.organizationId,
 
         violationId: data.violationId,
+        controlId: data.controlId,
         source: data.source,
         taskTitle: data.taskTitle,
         taskDescription: data.taskDescription,

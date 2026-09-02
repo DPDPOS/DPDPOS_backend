@@ -2,6 +2,11 @@ import { logger } from "../infrastructure/logging/logger.js";
 
 import { startValidationWorker, stopValidationWorker } from "../modules/validations/jobs/validation-run.worker.js";
 import { registerDailyValidationScheduler } from "./schedulers/daily-validation.scheduler.js";
+import { registerSlaReminderScheduler } from "./schedulers/sla-reminder.scheduler.js";
+import {
+  registerEvidenceExpirationScheduler,
+  stopEvidenceExpirationScheduler,
+} from "./schedulers/evidence-expiration.scheduler.js";
 
 // Developer C workers
 import { startNotificationWorker, stopNotificationWorker } from "../modules/notifications/jobs/notification.worker.js";
@@ -18,6 +23,8 @@ import { startEmailOtpWorker, stopEmailOtpWorker } from "../modules/auth/jobs/em
 export async function registerJobProcessors(): Promise<void> {
   startValidationWorker();
   await registerDailyValidationScheduler();
+  await registerSlaReminderScheduler();
+  await registerEvidenceExpirationScheduler();
 
   // Developer C job processors
   startNotificationWorker();
@@ -36,6 +43,7 @@ export async function stopJobProcessors(): Promise<void> {
     stopNotificationWorker(),
     stopReportWorker(),
     stopAiWorker(),
+    stopEvidenceExpirationScheduler(),
   ]);
   logger.info("jobs.registry.stopped");
 }

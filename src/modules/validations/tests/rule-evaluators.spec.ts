@@ -13,11 +13,23 @@ import { RequestRespondedWithinSlaRule } from "../rules/request-responded-within
 function emptySnapshot(): RuleEvaluationInput {
   return {
     organizationId: randomUUID(),
+    organization: {
+      isSignificantDataFiduciary: false,
+      processesChildrenData: false,
+      hasDpoUser: false,
+      frameworkId: null,
+    },
+    controls: [],
     dataAssets: [],
     processingActivities: [],
     notices: [],
     consentRecords: [],
     dataSubjectRequests: [],
+    openErasureRequests: 0,
+    vendors: [],
+    openFindings: [],
+    agents: [],
+    catalogRevisionAgeHours: null,
   };
 }
 
@@ -334,6 +346,36 @@ describe("RequestRespondedWithinSlaRule (VLD-003)", () => {
     ];
 
     const outcome = await new RequestRespondedWithinSlaRule().evaluate(snapshot);
+    expect(outcome.status).toBe("FAIL");
+  });
+});
+
+describe("Extended DPDP rules", () => {
+  it("breach-notification-ready fails without CTRL-BREACH", async () => {
+    const { BreachNotificationReadyRule } = await import(
+      "../rules/dpdp-extended.rules.js"
+    );
+    const outcome = await new BreachNotificationReadyRule().evaluate(
+      emptySnapshot(),
+    );
+    expect(outcome.status).toBe("FAIL");
+  });
+
+  it("sdf-dpo-appointed passes for non-SDF orgs", async () => {
+    const { SdfDpoAppointedRule } = await import(
+      "../rules/dpdp-extended.rules.js"
+    );
+    const outcome = await new SdfDpoAppointedRule().evaluate(emptySnapshot());
+    expect(outcome.status).toBe("PASS");
+  });
+
+  it("children-data-protected fails when children in scope without control", async () => {
+    const { ChildrenDataProtectedRule } = await import(
+      "../rules/dpdp-extended.rules.js"
+    );
+    const snapshot = emptySnapshot();
+    snapshot.organization.processesChildrenData = true;
+    const outcome = await new ChildrenDataProtectedRule().evaluate(snapshot);
     expect(outcome.status).toBe("FAIL");
   });
 });

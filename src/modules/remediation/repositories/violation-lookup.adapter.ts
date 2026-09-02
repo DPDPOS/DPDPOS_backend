@@ -6,14 +6,14 @@ export class PrismaViolationLookup implements ViolationLookup {
   async findById(
     organizationId: string,
     violationId: string,
-  ): Promise<{ id: string } | null> {
+  ): Promise<{ id: string; controlId: string | null } | null> {
     const row = await prisma.violation.findFirst({
       where: {
         id: violationId,
         organizationId,
         deletedAt: null,
       },
-      select: { id: true },
+      select: { id: true, controlId: true },
     });
     return row;
   }

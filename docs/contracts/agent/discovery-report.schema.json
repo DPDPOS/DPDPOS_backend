@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dpdpos.example/schemas/agent/discovery-report.schema.json",
+  "title": "DiscoveryReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reportId", "agentId", "revision", "discoveredAt", "reportHash", "systems", "piiMap"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "reportId": { "type": "string", "format": "uuid" },
+    "agentId": { "type": "string", "format": "uuid" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "discoveredAt": { "type": "string", "format": "date-time" },
+    "reportHash": { "$ref": "#/$defs/sha256" },
+    "systems": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dataSystem" },
+      "maxItems": 10000
+    },
+    "piiMap": { "$ref": "#/$defs/piiMap" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "compliance-finding.schema.json" },
+      "maxItems": 100000
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "dataField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["externalId", "name", "pii"],
+      "properties": {
+        "externalId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "path": { "type": "string", "maxLength": 2048 },
+        "dataType": { "type": "string", "maxLength": 256 },
+        "nullable": { "type": "boolean" },
+        "pii": { "type": "boolean" },
+        "piiCategory": { "type": "string", "maxLength": 128 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "dataAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["externalId", "name", "assetType", "fields"],
+      "properties": {
+        "externalId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "assetType": {
+          "enum": ["TABLE", "COLLECTION", "BUCKET", "FILE", "ENDPOINT", "OTHER"]
+        },
+        "path": { "type": "string", "maxLength": 2048 },
+        "recordCountEstimate": { "type": "integer", "minimum": 0 },
+        "metadata": { "$ref": "#/$defs/metadata" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataField" },
+          "maxItems": 100000
+        }
+      }
+    },
+    "dataSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["externalId", "name", "systemType", "assets"],
+      "properties": {
+        "externalId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "systemType": {
+          "enum": ["DATABASE", "OBJECT_STORE", "SAAS", "FILE_SYSTEM", "API", "OTHER"]
+        },
+        "connectorKey": { "type": "string", "maxLength": 256 },
+        "environment": { "type": "string", "maxLength": 128 },
+        "location": { "type": "string", "maxLength": 512 },
+        "metadata": { "$ref": "#/$defs/metadata" },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataAsset" },
+          "maxItems": 100000
+        }
+      }
+    },
+    "piiOccurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["systemExternalId", "assetExternalId", "fieldExternalId"],
+      "properties": {
+        "systemExternalId": { "type": "string", "minLength": 1 },
+        "assetExternalId": { "type": "string", "minLength": 1 },
+        "fieldExternalId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "piiMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["categories"],
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "occurrences"],
+            "properties": {
+              "category": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "occurrences": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/piiOccurrence" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

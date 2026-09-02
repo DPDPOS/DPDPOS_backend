@@ -1,4 +1,5 @@
 import type {
+  FindingSource,
   RuleSeverity,
   ViolationStatus,
 } from "@prisma/client";
@@ -9,6 +10,11 @@ export type ViolationRecord = {
 
   validationResultId: string | null;
   sourceKey: string | null;
+  findingSource: FindingSource;
+  dedupeKey: string | null;
+  complianceFindingId: string | null;
+  agentId: string | null;
+  assessmentId: string | null;
   severity: RuleSeverity;
   title: string;
   description: string | null;
@@ -36,6 +42,11 @@ export type ViolationResponse = {
   id: string;
 
   validationResultId: string | null;
+  findingSource: string;
+  dedupeKey: string | null;
+  complianceFindingId: string | null;
+  agentId: string | null;
+  assessmentId: string | null;
   severity: string;
   title: string;
   description: string | null;
@@ -62,6 +73,11 @@ export function toViolationResponse(
     id: violation.id,
 
     validationResultId: violation.validationResultId,
+    findingSource: violation.findingSource,
+    dedupeKey: violation.dedupeKey,
+    complianceFindingId: violation.complianceFindingId,
+    agentId: violation.agentId,
+    assessmentId: violation.assessmentId,
     severity: violation.severity,
     title: violation.title,
     description: violation.description,

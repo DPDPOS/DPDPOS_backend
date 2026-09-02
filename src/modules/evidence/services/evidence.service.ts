@@ -13,7 +13,6 @@ import { assertTransition } from "../domain/evidence-lifecycle.js";
 import crypto from "crypto";
 import type { CreateEvidenceDto, ConfirmUploadDto, TagEvidenceDto, MapEvidenceDto, ListEvidenceQuery } from "../dto/evidence.dto.js";
 import type { ExportEvidenceDto } from "../dto/evidence.dto.js";
-import { exportQueue } from "../../../jobs/queues/export.queue.js";
 
 export class EvidenceService {
   private repo = new EvidenceRepository();
@@ -22,6 +21,8 @@ export class EvidenceService {
     const s3Client = await getS3Client();
     const id = crypto.randomUUID();
     const storageKey = `evidence/${ctx.organizationId}/${id}/${dto.fileName}`;
+    // Default retention: 1 year from upload unless a caller sets expiresAt later.
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
     return withTransaction(async (tx) => {
       const evidence = await this.repo.create(tx, ctx, {
@@ -35,6 +36,7 @@ export class EvidenceService {
         storageKey,
         status: "UPLOADED",
         uploadedBy: ctx.actorUserId,
+        expiresAt,
       });
 
       await writeOutboxEvent(tx, {
@@ -132,6 +134,39 @@ export class EvidenceService {
         correlationId: ctx.correlationId,
       });
 
+      // Advance the linked control immediately (event handler remains as
+      // idempotent backup for roadmap sync / other subscribers).
+      if (updated.controlId) {
+        const control = await tx.control.findFirst({
+          where: {
+            id: updated.controlId,
+            organizationId: ctx.organizationId,
+            deletedAt: null,
+            status: "NOT_STARTED",
+          },
+        });
+        if (control) {
+          await tx.control.update({
+            where: { id: control.id },
+            data: {
+              status: "IN_PROGRESS",
+              updatedBy: ctx.actorUserId,
+            },
+          });
+          await writeOutboxEvent(tx, {
+            eventType: DOMAIN_EVENTS.ControlUpdated,
+            organizationId: ctx.organizationId,
+            actorUserId: ctx.actorUserId,
+            correlationId: ctx.correlationId,
+            payload: {
+              controlId: control.id,
+              status: "IN_PROGRESS",
+              code: control.code,
+            },
+          });
+        }
+      }
+
       return updated;
     });
   }
@@ -142,10 +177,47 @@ export class EvidenceService {
     assertTransition(existing.status, "LOCKED");
 
     return withTransaction(async (tx) => {
-      return this.repo.update(tx, ctx, id, {
+      const updated = await this.repo.update(tx, ctx, id, {
         status: "LOCKED",
-        lockedAt: new Date()
+        lockedAt: new Date(),
       });
+
+      // Locked approved evidence is immutable proof — advance the linked
+      // control to IMPLEMENTED when it is still in progress / not started.
+      if (updated.controlId) {
+        const control = await tx.control.findFirst({
+          where: {
+            id: updated.controlId,
+            organizationId: ctx.organizationId,
+            deletedAt: null,
+            status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+          },
+        });
+        if (control) {
+          await tx.control.update({
+            where: { id: control.id },
+            data: {
+              status: "IMPLEMENTED",
+              updatedBy: ctx.actorUserId,
+            },
+          });
+          await writeOutboxEvent(tx, {
+            eventType: DOMAIN_EVENTS.ControlUpdated,
+            organizationId: ctx.organizationId,
+            actorUserId: ctx.actorUserId,
+            correlationId: ctx.correlationId,
+            payload: {
+              controlId: control.id,
+              status: "IMPLEMENTED",
+              code: control.code,
+              reason: "evidence_locked",
+              evidenceId: updated.id,
+            },
+          });
+        }
+      }
+
+      return updated;
     });
   }
 
@@ -153,7 +225,12 @@ export class EvidenceService {
     const existing = await this.repo.findById(ctx.organizationId, id);
     if (!existing) throw new NotFoundError("Evidence not found");
     const downloadUrl = await this.getDownloadUrl(ctx, id);
-    return { evidence: existing, downloadUrl };
+    // Flat record + optional downloadUrl — matches list items and the UI drawer.
+    return {
+      ...existing,
+      tags: existing.tags ?? [],
+      downloadUrl,
+    };
   }
 
   async list(ctx: RequestContext, query: ListEvidenceQuery) {
@@ -189,15 +266,26 @@ export class EvidenceService {
   }
 
   async exportEvidencePack(ctx: RequestContext, filters: ExportEvidenceDto) {
-    const job = await exportQueue.add("evidence-export", {
-      organizationId: ctx.organizationId,
-      requestedBy: ctx.actorUserId,
-      filters,
-    }, {
-      removeOnComplete: 100,
-      removeOnFail: 500,
+    // Route through the report pipeline so status/download live in Reports
+    // (the dedicated export-queue had no worker).
+    const { reportService } = await import(
+      "../../reports/services/report.service.js"
+    );
+    const report = await reportService.generate(ctx, {
+      reportType: "EVIDENCE_REPORT",
+      title: "Evidence export pack",
+      format: "CSV",
+      parameters: {
+        status: filters.status,
+        controlId: filters.controlId,
+        violationId: filters.violationId,
+      },
     });
-    return { jobId: job.id, status: "PENDING" };
+    return {
+      jobId: report.id,
+      reportId: report.id,
+      status: "PENDING" as const,
+    };
   }
 }
 export const evidenceService = new EvidenceService();

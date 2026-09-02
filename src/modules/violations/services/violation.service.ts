@@ -1,10 +1,16 @@
-import { Prisma, type RuleSeverity } from "@prisma/client";
+import {
+  Prisma,
+  type FindingSource,
+  type RuleSeverity,
+} from "@prisma/client";
 
 import { ConflictError, NotFoundError } from "../../../shared/errors/app-error.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
 import { logger } from "../../../infrastructure/logging/logger.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
+import { resolveFrameworkCode } from "../../controls/domain/control-catalog.js";
 
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
@@ -36,6 +42,28 @@ export type ValidationFailedPayload = {
   severity: string;
   evidenceRequiredFlag?: boolean;
   explanation?: string;
+  entityType?: string;
+  entityId?: string;
+  agentId?: string;
+};
+
+export type OpenOrDedupeViolationInput = {
+  findingSource: FindingSource;
+  ruleOrControlCode: string;
+  entityType: string;
+  entityId: string;
+  severity: RuleSeverity;
+  title: string;
+  description?: string;
+  assessmentId?: string;
+  agentId?: string;
+  complianceFindingId?: string;
+  correlationId?: string;
+  validationResultId?: string;
+  controlId?: string;
+  assessmentControlCode?: string;
+  sourceKey?: string;
+  evidenceRequiredFlag?: boolean;
 };
 
 export class ViolationService {
@@ -62,6 +90,7 @@ export class ViolationService {
     return withTransaction(async (tx) => {
       const violation = await this.repository.create(tx, ctx, {
         validationResultId: input.validationResultId,
+        findingSource: "MANUAL",
         severity: input.severity,
         title: input.title,
         description: input.description,
@@ -89,6 +118,62 @@ export class ViolationService {
     });
   }
 
+  async openOrDedupe(
+    ctx: RequestContext,
+    input: OpenOrDedupeViolationInput,
+  ): Promise<{ violation: ViolationResponse; created: boolean }> {
+    const dedupeKey = `${input.ruleOrControlCode}|${input.entityType}|${input.entityId}`;
+
+    return withTransaction(async (tx) => {
+      // Serialize this organization/key pair so concurrent event delivery
+      // cannot create two OPEN violations in the absence of a partial index.
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${ctx.organizationId}|${dedupeKey}`}, 0)
+        )
+      `;
+      const existing = await this.repository.refreshOpenByDedupeKey(
+        tx,
+        ctx,
+        dedupeKey,
+      );
+      if (existing) {
+        return { violation: toViolationResponse(existing), created: false };
+      }
+
+      const violation = await this.repository.create(tx, ctx, {
+        validationResultId: input.validationResultId,
+        controlId: input.controlId,
+        assessmentControlCode: input.assessmentControlCode,
+        sourceKey: input.sourceKey ?? dedupeKey,
+        findingSource: input.findingSource,
+        dedupeKey,
+        complianceFindingId: input.complianceFindingId,
+        agentId: input.agentId,
+        assessmentId: input.assessmentId,
+        severity: input.severity,
+        title: input.title,
+        description: input.description,
+        evidenceRequiredFlag: input.evidenceRequiredFlag,
+      });
+
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.ViolationCreated,
+        organizationId: ctx.organizationId,
+        actorUserId: ctx.actorUserId,
+        correlationId: input.correlationId ?? ctx.correlationId,
+        payload: {
+          violationId: violation.id,
+          severity: violation.severity,
+          title: violation.title,
+          validationResultId: violation.validationResultId ?? undefined,
+          evidenceRequiredFlag: violation.evidenceRequiredFlag,
+        },
+      });
+      return { violation: toViolationResponse(violation), created: true };
+    });
+  }
+
   /**
    * Opens a Violation from an assessment FAIL control so remediation AUTO-tasks
    * follow the existing ViolationCreated → remediation path.
@@ -106,46 +191,53 @@ export class ViolationService {
     },
   ): Promise<ViolationResponse | null> {
     const sourceKey = `assessment:${input.assessmentId}:v${input.versionNumber}:${input.controlCode}`;
-    const existing = await this.repository.findBySourceKey(
-      ctx.organizationId,
-      sourceKey,
-    );
-    if (existing) {
-      return toViolationResponse(existing);
-    }
-
     const severity = (
       VIOLATION_SEVERITIES.includes(input.severity as (typeof VIOLATION_SEVERITIES)[number])
         ? input.severity
         : "HIGH"
     ) as RuleSeverity;
 
-    return withTransaction(async (tx) => {
-      const violation = await this.repository.create(tx, ctx, {
-        sourceKey,
-        severity,
-        title: `[Assessment] ${input.controlCode} failed — ${input.assessmentName}`,
-        description: `Readiness evaluation v${input.versionNumber} marked ${input.controlCode} as FAIL.\n\n${input.reasoning}\n\nClose this after remediating and re-evaluate the assessment version.`,
-        evidenceRequiredFlag: true,
+    const frameworkControlCode = resolveFrameworkCode(input.controlCode);
+    let controlId: string | undefined;
+    if (frameworkControlCode) {
+      const framework = await prisma.framework.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          status: "PUBLISHED",
+          deletedAt: null,
+        },
+        orderBy: { publishedAt: "desc" },
+        select: { id: true },
       });
+      if (framework) {
+        const control = await prisma.control.findFirst({
+          where: {
+            organizationId: ctx.organizationId,
+            frameworkId: framework.id,
+            code: frameworkControlCode,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        controlId = control?.id;
+      }
+    }
 
-      const payload: ViolationCreatedEventPayload = {
-        violationId: violation.id,
-        severity: violation.severity,
-        title: violation.title,
-        evidenceRequiredFlag: true,
-      };
-
-      await writeOutboxEvent(tx, {
-        eventType: DOMAIN_EVENTS.ViolationCreated,
-        organizationId: ctx.organizationId,
-        actorUserId: ctx.actorUserId,
-        correlationId: ctx.correlationId,
-        payload,
-      });
-
-      return toViolationResponse(violation);
+    const result = await this.openOrDedupe(ctx, {
+      findingSource: "ASSESSMENT",
+      ruleOrControlCode: input.controlCode,
+      entityType: "Assessment",
+      entityId: input.assessmentId,
+      severity,
+      title: `[Assessment] ${input.controlCode} failed — ${input.assessmentName}`,
+      description: `Readiness evaluation v${input.versionNumber} marked ${input.controlCode} as FAIL.\n\n${input.reasoning}\n\nClose this after remediating and re-evaluate the assessment version.`,
+      assessmentId: input.assessmentId,
+      controlId,
+      assessmentControlCode: input.controlCode,
+      sourceKey,
+      evidenceRequiredFlag: true,
     });
+    return result.violation;
   }
 
   /**
@@ -200,11 +292,30 @@ export class ViolationService {
 
     const rule = await this.rules.findById(ctx.organizationId, payload.ruleId);
 
+    if (payload.entityType && payload.entityId) {
+      const opened = await this.openOrDedupe(ctx, {
+        findingSource: "VALIDATION",
+        ruleOrControlCode: payload.ruleCode,
+        entityType: payload.entityType,
+        entityId: payload.entityId,
+        severity,
+        title: rule
+          ? `Validation failed: ${rule.title}`
+          : `Validation failed: ${payload.ruleCode}`,
+        description: payload.explanation ?? result.explanation ?? undefined,
+        validationResultId: payload.resultId,
+        agentId: payload.agentId,
+        evidenceRequiredFlag: payload.evidenceRequiredFlag ?? false,
+      });
+      return opened.violation;
+    }
+
     return withTransaction(async (tx) => {
       let violation;
       try {
         violation = await this.repository.create(tx, ctx, {
           validationResultId: payload.resultId,
+          findingSource: "VALIDATION",
           severity,
           title: rule
             ? `Validation failed: ${rule.title}`
@@ -277,6 +388,7 @@ export class ViolationService {
       status: options.status,
       severity: options.severity,
       assignedTo: options.assignedTo,
+      findingSource: options.findingSource,
     });
 
     return violations.map(toViolationResponse);
@@ -397,6 +509,9 @@ export class ViolationService {
         violationId: violation.id,
         closedAt:
           violation.closedAt?.toISOString() ?? new Date().toISOString(),
+        title: violation.title,
+        assignedTo: violation.assignedTo,
+        resolutionSummary: violation.resolutionSummary,
       };
 
       await writeOutboxEvent(tx, {

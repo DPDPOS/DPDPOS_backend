@@ -2,6 +2,9 @@ export { createNotificationRouter } from "./routes/notification.routes.js";
 export { NotificationService, notificationService } from "./services/notification.service.js";
 export {
   onViolationCreatedNotify,
+  onViolationClosedNotify,
+  onRemediationTaskAssignedNotify,
+  onRemediationCompletedNotify,
   onEvidenceApprovedNotify,
   onRightsRequestNotify,
   onValidationFailedNotify,

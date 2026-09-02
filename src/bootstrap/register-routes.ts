@@ -33,6 +33,10 @@ import {
   createIdentityAdminRouter,
   createIdentityAuthRouter,
 } from "../modules/identity/index.js";
+import { createAgentRouter } from "../modules/agents/index.js";
+import { createOnboardingRouter } from "../modules/onboarding/index.js";
+import { createPluginRouter } from "../modules/plugins/index.js";
+import { createLedgerRouter } from "../modules/ledger/index.js";
 
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
@@ -81,4 +85,8 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/reports`, createReportRouter());
   app.use(`${v1}/ai`, createAiRouter());
   app.use(`${v1}/assessments`, createAssessmentRouter());
+  app.use(`${v1}/agents`, createAgentRouter());
+  app.use(`${v1}/onboarding`, createOnboardingRouter());
+  app.use(`${v1}/plugins`, createPluginRouter());
+  app.use(`${v1}/ledger`, createLedgerRouter());
 }

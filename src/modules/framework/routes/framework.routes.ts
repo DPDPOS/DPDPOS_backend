@@ -10,6 +10,7 @@ import { frameworkPermissions } from "../permissions/framework.permissions.js";
 import {
   generateFrameworkDtoSchema,
   publishFrameworkDtoSchema,
+  regenerateFrameworkDtoSchema,
   roadmapQuerySchema,
 } from "../dto/framework.dto.js";
 
@@ -38,6 +39,22 @@ export function createFrameworkRouter(): Router {
     requirePermission(frameworkPermissions.publish),
     validateBody(publishFrameworkDtoSchema),
     (req, res, next) => void frameworkController.publish(req, res, next),
+  );
+
+  router.post(
+    "/regenerate",
+    authenticate,
+    requirePermission(frameworkPermissions.generate),
+    validateBody(regenerateFrameworkDtoSchema),
+    (req, res, next) => void frameworkController.regenerate(req, res, next),
+  );
+
+  router.post(
+    "/regenerate/preview",
+    authenticate,
+    requirePermission(frameworkPermissions.generate),
+    validateBody(regenerateFrameworkDtoSchema),
+    (req, res, next) => void frameworkController.previewRegenerate(req, res, next),
   );
 
   return router;

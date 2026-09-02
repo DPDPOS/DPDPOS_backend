@@ -11,6 +11,7 @@ import type { RequestContext } from "../../../shared/types/request-context.js";
 import type {
   GenerateFrameworkDto,
   PublishFrameworkDto,
+  RegenerateFrameworkDto,
 } from "../dto/framework.dto.js";
 import { FrameworkRepository } from "../repositories/framework.repository.js";
 import {
@@ -18,27 +19,44 @@ import {
   selectTemplatesForProfile,
   type FrameworkProfile,
 } from "../domain/templates.js";
+import { calculateDueAt } from "../domain/due-date-calculator.js";
 import {
   toFrameworkResponse,
   type FrameworkResponse,
 } from "../types/framework.types.js";
+import { roadmapService } from "./roadmap.service.js";
+
+export type RegeneratePreview = {
+  added: string[];
+  removed: string[];
+  unchanged: string[];
+};
 
 export class FrameworkService {
   constructor(private readonly repo = new FrameworkRepository()) {}
 
-  async generate(
-    ctx: RequestContext,
-    input: GenerateFrameworkDto,
-  ): Promise<FrameworkResponse> {
-    const profile: FrameworkProfile = {
+  private buildProfile(
+    input: GenerateFrameworkDto | RegenerateFrameworkDto,
+  ): FrameworkProfile {
+    return {
       industryProfile: input.industryProfile.trim().toLowerCase(),
       maturityLevel: input.maturityLevel,
       dataSensitivity: input.dataSensitivity,
       departmentCount: input.departmentCount,
       processorCount: input.processorCount,
       isSdf: input.isSdf,
+      processesChildrenData: input.processesChildrenData,
+      crossBorderTransfers: input.crossBorderTransfers,
+      companySize: input.companySize,
+      includeNistControls: input.includeNistControls,
     };
+  }
 
+  async generate(
+    ctx: RequestContext,
+    input: GenerateFrameworkDto,
+  ): Promise<FrameworkResponse> {
+    const profile = this.buildProfile(input);
     const selected = selectTemplatesForProfile(profile);
     if (selected.controls.length === 0) {
       throw new ValidationError(
@@ -54,7 +72,6 @@ export class FrameworkService {
     const frameworkId = await withTransaction(async (tx) => {
       await this.repo.deleteDraftsWithChildren(tx, ctx.organizationId);
 
-      // Placeholder roadmap; updated after child rows have due dates
       const framework = await this.repo.createFramework(tx, {
         organizationId: ctx.organizationId,
         name,
@@ -72,12 +89,11 @@ export class FrameworkService {
         title: string;
         phase: (typeof selected.controls)[number]["phase"];
         dueAt: string;
+        sdfOverlay?: boolean;
       }> = [];
 
       for (const tpl of selected.controls) {
-        const dueAt = new Date(
-          generatedAt.getTime() + tpl.dueDaysFromGenerate * 24 * 60 * 60 * 1000,
-        );
+        const dueAt = calculateDueAt(tpl, profile, generatedAt);
         const control = await this.repo.createControl(tx, {
           organizationId: ctx.organizationId,
           frameworkId: framework.id,
@@ -85,6 +101,8 @@ export class FrameworkService {
           title: tpl.title,
           description: tpl.description,
           legalBasisRef: tpl.legalBasisRef,
+          phase: tpl.phase,
+          sdfOverlay: tpl.sdfOverlay ?? tpl.requiresSdf ?? false,
           dueAt,
           createdBy: ctx.actorUserId,
           updatedBy: ctx.actorUserId,
@@ -95,6 +113,7 @@ export class FrameworkService {
           title: tpl.title,
           phase: tpl.phase,
           dueAt: dueAt.toISOString(),
+          sdfOverlay: tpl.sdfOverlay ?? tpl.requiresSdf ?? false,
         });
       }
 
@@ -107,7 +126,7 @@ export class FrameworkService {
           if (createdRequirementCodes.has(reqCode)) continue;
           const reqTpl = selected.requirements.find((r) => r.code === reqCode);
           if (!reqTpl) continue;
-          await this.repo.createRequirement(tx, {
+          const requirement = await this.repo.createRequirement(tx, {
             organizationId: ctx.organizationId,
             frameworkId: framework.id,
             controlId,
@@ -119,6 +138,17 @@ export class FrameworkService {
             updatedBy: ctx.actorUserId,
           });
           createdRequirementCodes.add(reqCode);
+
+          await writeOutboxEvent(tx, {
+            eventType: DOMAIN_EVENTS.RequirementMapped,
+            organizationId: ctx.organizationId,
+            actorUserId: ctx.actorUserId,
+            correlationId: ctx.correlationId,
+            payload: {
+              requirementId: requirement.id,
+              controlId,
+            },
+          });
         }
       }
 
@@ -155,7 +185,7 @@ export class FrameworkService {
   async getRoadmap(
     ctx: RequestContext,
     frameworkId?: string,
-  ): Promise<FrameworkResponse> {
+  ): Promise<FrameworkResponse & { liveRoadmap: Awaited<ReturnType<typeof roadmapService.buildLiveRoadmap>> }> {
     const row = frameworkId
       ? await this.repo.findById({
           organizationId: ctx.organizationId,
@@ -168,7 +198,152 @@ export class FrameworkService {
     if (!row) {
       throw new NotFoundError("Framework roadmap not found");
     }
-    return toFrameworkResponse(row);
+
+    const liveRoadmap = await roadmapService.buildLiveRoadmap(
+      ctx.organizationId,
+      row.id,
+    );
+
+    return {
+      ...toFrameworkResponse(row),
+      liveRoadmap,
+    };
+  }
+
+  async previewRegenerate(
+    ctx: RequestContext,
+    input: RegenerateFrameworkDto,
+  ): Promise<RegeneratePreview> {
+    const target = input.frameworkId
+      ? await this.repo.findById({
+          organizationId: ctx.organizationId,
+          id: input.frameworkId,
+        })
+      : await this.repo.findLatestForOrg({
+          organizationId: ctx.organizationId,
+        });
+
+    if (!target) {
+      throw new NotFoundError("Framework not found");
+    }
+
+    const profile = this.buildProfile(input);
+    const selected = selectTemplatesForProfile(profile);
+    const newCodes = new Set(selected.controls.map((c) => c.code));
+    const existingCodes = target.controls.map((c) => c.code);
+
+    const added = [...newCodes].filter((c) => !existingCodes.includes(c));
+    const removed = existingCodes.filter((c) => !newCodes.has(c));
+    const unchanged = existingCodes.filter((c) => newCodes.has(c));
+
+    return { added, removed, unchanged };
+  }
+
+  async regenerate(
+    ctx: RequestContext,
+    input: RegenerateFrameworkDto,
+  ): Promise<FrameworkResponse & { diff: RegeneratePreview }> {
+    const diff = await this.previewRegenerate(ctx, input);
+    if (!input.confirm) {
+      throw new ValidationError(
+        "Set confirm=true to apply framework regeneration",
+        { diff },
+      );
+    }
+
+    const target = input.frameworkId
+      ? await this.repo.findById({
+          organizationId: ctx.organizationId,
+          id: input.frameworkId,
+        })
+      : await this.repo.findLatestForOrg({
+          organizationId: ctx.organizationId,
+        });
+
+    if (!target) {
+      throw new NotFoundError("Framework not found");
+    }
+
+    const profile = this.buildProfile(input);
+    const selected = selectTemplatesForProfile(profile);
+    const selectedByCode = new Map(selected.controls.map((c) => [c.code, c]));
+    const now = new Date();
+
+    await withTransaction(async (tx) => {
+      for (const code of diff.removed) {
+        await tx.control.updateMany({
+          where: {
+            organizationId: ctx.organizationId,
+            frameworkId: target.id,
+            code,
+            deletedAt: null,
+          },
+          data: {
+            deletedAt: now,
+            updatedBy: ctx.actorUserId,
+          },
+        });
+      }
+
+      for (const code of diff.added) {
+        const tpl = selectedByCode.get(code);
+        if (!tpl) continue;
+        const dueAt = calculateDueAt(tpl, profile, now);
+        const control = await this.repo.createControl(tx, {
+          organizationId: ctx.organizationId,
+          frameworkId: target.id,
+          code: tpl.code,
+          title: tpl.title,
+          description: tpl.description,
+          legalBasisRef: tpl.legalBasisRef,
+          phase: tpl.phase,
+          sdfOverlay: tpl.sdfOverlay ?? tpl.requiresSdf ?? false,
+          dueAt,
+          createdBy: ctx.actorUserId,
+          updatedBy: ctx.actorUserId,
+        });
+
+        for (const reqCode of tpl.requirementCodes) {
+          const reqTpl = selected.requirements.find((r) => r.code === reqCode);
+          if (!reqTpl) continue;
+          const existing = await tx.requirement.findFirst({
+            where: {
+              frameworkId: target.id,
+              code: reqCode,
+              deletedAt: null,
+            },
+          });
+          if (existing) continue;
+
+          await this.repo.createRequirement(tx, {
+            organizationId: ctx.organizationId,
+            frameworkId: target.id,
+            controlId: control.id,
+            code: reqTpl.code,
+            title: reqTpl.title,
+            description: reqTpl.description,
+            legalBasisRef: reqTpl.legalBasisRef,
+            createdBy: ctx.actorUserId,
+            updatedBy: ctx.actorUserId,
+          });
+        }
+      }
+
+      await roadmapService.syncSnapshot(
+        ctx.organizationId,
+        target.id,
+        ctx.actorUserId,
+      );
+    });
+
+    const loaded = await this.repo.findById({
+      organizationId: ctx.organizationId,
+      id: target.id,
+    });
+    if (!loaded) {
+      throw new NotFoundError("Framework not found after regeneration");
+    }
+    return { ...toFrameworkResponse(loaded), diff };
   }
 
   async publish(

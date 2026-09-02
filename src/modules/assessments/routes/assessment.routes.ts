@@ -204,5 +204,13 @@ export function createAssessmentRouter(): Router {
     (req, res, next) => void assessmentController.listAudit(req, res, next),
   );
 
+  router.get(
+    "/:id/audit/verify",
+    authenticate,
+    requirePermission(assessmentPermissions.read),
+    validateParams(assessmentIdParamSchema),
+    (req, res, next) => void assessmentController.verifyAudit(req, res, next),
+  );
+
   return router;
 }

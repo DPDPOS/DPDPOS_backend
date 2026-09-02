@@ -10,5 +10,5 @@ export interface ViolationLookup {
   findById(
     organizationId: string,
     violationId: string,
-  ): Promise<{ id: string } | null>;
+  ): Promise<{ id: string; controlId: string | null } | null>;
 }

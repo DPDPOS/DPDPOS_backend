@@ -532,6 +532,112 @@ export class VendorService {
       unacknowledgedChildCount,
     });
   }
+
+  /**
+   * TPRM: validate whether sending PII tags to an endpoint/vendor is covered
+   * by an active DPA (and flag cross-border when agreement disallows it).
+   */
+  async validateDataFlow(
+    organizationId: string,
+    input: { endpoint: string; piiTags: string[]; vendorId?: string },
+  ): Promise<{
+    allowed: boolean;
+    reasons: string[];
+    vendorId: string | null;
+    hasActiveDpa: boolean;
+    crossBorderAllowed: boolean;
+  }> {
+    const reasons: string[] = [];
+    let vendor =
+      input.vendorId
+        ? await this.vendors.findById(organizationId, input.vendorId)
+        : null;
+    if (!vendor) {
+      const needle = input.endpoint.trim().toLowerCase();
+      const all = await this.vendors.list(organizationId);
+      vendor =
+        all.find(
+          (v) =>
+            v.name.toLowerCase().includes(needle) ||
+            needle.includes(v.name.toLowerCase()),
+        ) ?? null;
+    }
+    if (!vendor) {
+      return {
+        allowed: false,
+        reasons: ["No registered vendor matches endpoint"],
+        vendorId: null,
+        hasActiveDpa: false,
+        crossBorderAllowed: false,
+      };
+    }
+    const activeDpa = await this.agreements.findActive(
+      organizationId,
+      vendor.id,
+    );
+    const hasActiveDpa = Boolean(activeDpa);
+    const crossBorderAllowed = Boolean(activeDpa?.crossBorderAllowed);
+    if (!hasActiveDpa) {
+      reasons.push("Vendor lacks an active DPA");
+    }
+    if (input.piiTags.length > 0 && !hasActiveDpa) {
+      reasons.push(
+        `PII tags (${input.piiTags.join(", ")}) require an active DPA`,
+      );
+    }
+    if (input.piiTags.length > 0 && hasActiveDpa && !crossBorderAllowed) {
+      reasons.push(
+        "Active DPA does not allow cross-border transfer for this flow",
+      );
+    }
+    return {
+      allowed: reasons.length === 0,
+      reasons,
+      vendorId: vendor.id,
+      hasActiveDpa,
+      crossBorderAllowed,
+    };
+  }
+
+  /**
+   * Compare agent-discovered DataSystems against registered vendors;
+   * returns unmapped systems (for ComplianceFinding upsert by callers).
+   */
+  async flagUnmappedSubprocessors(organizationId: string): Promise<
+    Array<{
+      systemId: string;
+      systemName: string;
+      systemType: string;
+      reason: string;
+    }>
+  > {
+    const [systems, vendors] = await Promise.all([
+      prisma.dataSystem.findMany({ where: { organizationId } }),
+      this.vendors.list(organizationId),
+    ]);
+    const vendorNames = vendors.map((v) => v.name.toLowerCase());
+    const findings: Array<{
+      systemId: string;
+      systemName: string;
+      systemType: string;
+      reason: string;
+    }> = [];
+    for (const system of systems) {
+      const name = system.name.toLowerCase();
+      const matched = vendorNames.some(
+        (vn) => name.includes(vn) || vn.includes(name),
+      );
+      if (!matched) {
+        findings.push({
+          systemId: system.id,
+          systemName: system.name,
+          systemType: system.systemType,
+          reason: "No registered vendor/sub-processor matches discovered system",
+        });
+      }
+    }
+    return findings;
+  }
 }
 
 export const vendorService = new VendorService();
