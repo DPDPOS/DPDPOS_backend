@@ -37,12 +37,24 @@ import {
   buildQuestionnaireCatalogPayload,
   getQuestionsForIndustry,
 } from "../domain/questionnaire-catalog.js";
+import { isOrganizationOnboarded } from "../../onboarding/services/onboarding.service.js";
 import {
   ASSESSMENT_DOCUMENT_TYPES,
   ASSESSMENT_DOCUMENT_TYPE_LABELS,
 } from "../domain/document-types.js";
+import {
+  buildQuestionnaireWorkbook,
+  parseQuestionnaireWorkbook,
+} from "../domain/questionnaire-excel.js";
 import { INDUSTRY_DOMAIN_OPTIONS } from "../domain/industry-domains.js";
 import { violationService } from "../../violations/services/violation.service.js";
+
+/** Free-text answers that act as narrative evidence when no policy PDFs are uploaded. */
+const NARRATIVE_ANSWER_CODES = new Set([
+  "Q-SEC-PHYSICAL",
+  "Q-SEC-ENCRYPT-DB",
+  "Q-SEC-KEY-MGMT",
+]);
 
 async function requireAssessment(organizationId: string, assessmentId: string) {
   const row = await prisma.assessment.findFirst({
@@ -170,6 +182,13 @@ export class AssessmentService {
   }
 
   async create(ctx: RequestContext, dto: CreateAssessmentDto) {
+    const onboarded = await isOrganizationOnboarded(ctx.organizationId);
+    if (!onboarded) {
+      throw new ValidationError(
+        "Complete organisation DPDP onboarding before creating assessments. See GET /api/v1/onboarding/status.",
+      );
+    }
+
     const assessment = await prisma.$transaction(async (tx) => {
       const created = await tx.assessment.create({
         data: {
@@ -190,6 +209,32 @@ export class AssessmentService {
           createdBy: ctx.actorUserId,
         },
       });
+
+      // Seed from org-level onboarding answers so operators are not re-prompted.
+      const orgAnswers = await tx.organizationOnboardingAnswer.findMany({
+        where: { organizationId: ctx.organizationId },
+      });
+      for (const a of orgAnswers) {
+        await tx.questionnaireAnswer.upsert({
+          where: {
+            assessmentId_versionNumber_questionCode: {
+              assessmentId: created.id,
+              versionNumber: 1,
+              questionCode: a.questionCode,
+            },
+          },
+          create: {
+            assessmentId: created.id,
+            organizationId: ctx.organizationId,
+            versionNumber: 1,
+            questionCode: a.questionCode,
+            valueJson: a.valueJson as Prisma.InputJsonValue,
+            answeredBy: ctx.actorUserId,
+          },
+          update: {},
+        });
+      }
+
       await appendAssessmentAudit({
         tx,
         assessmentId: created.id,
@@ -199,7 +244,10 @@ export class AssessmentService {
         action: "ASSESSMENT_CREATED",
         objectType: "Assessment",
         objectId: created.id,
-        payload: { name: dto.name },
+        payload: {
+          name: dto.name,
+          seededFromOnboarding: orgAnswers.length,
+        },
       });
       return created;
     });
@@ -494,6 +542,38 @@ export class AssessmentService {
     return { saved: saved.length, versionNumber: assessment.currentVersion };
   }
 
+  async downloadQuestionnaireTemplate(ctx: RequestContext): Promise<{
+    buffer: Buffer;
+    fileName: string;
+  }> {
+    const industry = await organizationIndustry(ctx.organizationId);
+    const questions = getQuestionsForIndustry(industry);
+    const buffer = await buildQuestionnaireWorkbook(questions, {
+      title: "DPDPOS assessment questionnaire",
+    });
+    return {
+      buffer,
+      fileName: `dpdpos-assessment-questionnaire-${industry ?? "core"}.xlsx`,
+    };
+  }
+
+  async importQuestionnaireExcel(
+    ctx: RequestContext,
+    assessmentId: string,
+    fileBase64: string,
+  ) {
+    const industry = await organizationIndustry(ctx.organizationId);
+    const questions = getQuestionsForIndustry(industry);
+    const buffer = Buffer.from(fileBase64, "base64");
+    const rows = await parseQuestionnaireWorkbook(buffer, questions);
+    return this.saveQuestionnaire(ctx, assessmentId, {
+      answers: rows.map((r) => ({
+        questionCode: r.questionCode,
+        value: r.value,
+      })),
+    });
+  }
+
   async createCliToken(
     ctx: RequestContext,
     assessmentId: string,
@@ -750,16 +830,20 @@ export class AssessmentService {
       return !answeredCodes.has(code);
     });
 
-    if (readyDocs.length === 0) {
-      throw new ValidationError(
-        "Upload at least one READY policy document before evaluating readiness.",
-      );
-    }
     if (missingRequired.length > 0) {
       throw new ValidationError(
         `Complete required questionnaire answers before evaluate (missing: ${missingRequired.slice(0, 5).join(", ")}).`,
       );
     }
+
+    const narrativeTexts = answers
+      .filter(
+        (a) =>
+          NARRATIVE_ANSWER_CODES.has(a.questionCode) ||
+          (typeof a.valueJson === "string" &&
+            String(a.valueJson).trim().length > 40),
+      )
+      .map((a) => `${a.questionCode}: ${String(a.valueJson)}`);
 
     const vendors = await prisma.vendor.findMany({
       where: {
@@ -795,7 +879,10 @@ export class AssessmentService {
         questionCode: a.questionCode,
         valueJson: a.valueJson,
       })),
-      documentTexts: readyDocs.map((d) => d.extractedText ?? "").filter(Boolean),
+      documentTexts: [
+        ...readyDocs.map((d) => d.extractedText ?? "").filter(Boolean),
+        ...narrativeTexts,
+      ],
       documentTypes: readyDocs.map((d) => d.documentType),
       vendorLive: {
         liveVendorCount: vendors.length,

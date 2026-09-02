@@ -6,6 +6,7 @@ import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { signAccessToken } from "../../auth/utils/jwt.js";
 import { ALL_PERMISSIONS } from "../../../shared/constants/permissions.js";
 import { deleteTestOrganizations } from "../../../test-utils/cleanup-organizations.js";
+import { markOrganizationOnboarded } from "../../../test-utils/mark-organization-onboarded.js";
 
 // ---------------------------------------------------------------------------
 // Mock the OpenAI-compatible adapter so tests never hit a real LLM provider.
@@ -111,6 +112,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
       .expect(201);
     organizationId = org.body.data.organization.id as string;
     userId = randomUUID();
+    await markOrganizationOnboarded(organizationId, userId);
 
     // Create assessment
     const auth = authHeader(organizationId, userId);
@@ -121,7 +123,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
       .expect(201);
     assessmentId = created.body.data.id as string;
 
-    // Upload a document (required for evaluate)
+    // Optional document (no longer required for evaluate)
     await request(app)
       .post(`/api/v1/assessments/${assessmentId}/documents`)
       .set("Authorization", auth)
@@ -176,6 +178,20 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
           { questionCode: "Q-PRIVACY-OWNER", value: true },
           { questionCode: "Q-TRAINING", value: false },
           { questionCode: "Q-SDF", value: false },
+          {
+            questionCode: "Q-SEC-PHYSICAL",
+            value: "Badge access, CCTV, locked server room",
+          },
+          { questionCode: "Q-SEC-ENCRYPT-REST", value: true },
+          {
+            questionCode: "Q-SEC-ENCRYPT-DB",
+            value: "AES-256 TDE on Postgres RDS",
+          },
+          {
+            questionCode: "Q-SEC-KEY-MGMT",
+            value: "AWS KMS CMK with annual rotation",
+          },
+          { questionCode: "Q-SEC-ENCRYPT-TRANSIT", value: true },
         ],
       })
       .expect(200);
@@ -597,6 +613,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
       .expect(201);
     const orgId1 = org1.body.data.organization.id as string;
     const uid1 = randomUUID();
+    await markOrganizationOnboarded(orgId1, uid1);
     const auth1 = authHeader(orgId1, uid1);
 
     const asmt1 = await request(app)
@@ -614,6 +631,7 @@ describe("Server-side AI classification in CLI evidence batch submission", () =>
       .expect(201);
     const orgId2 = org2.body.data.organization.id as string;
     const uid2 = randomUUID();
+    await markOrganizationOnboarded(orgId2, uid2);
     const auth2 = authHeader(orgId2, uid2);
 
     const asmt2 = await request(app)
@@ -901,6 +919,20 @@ async function setupAssessment(
         { questionCode: "Q-PRIVACY-OWNER", value: true },
         { questionCode: "Q-TRAINING", value: false },
         { questionCode: "Q-SDF", value: false },
+        {
+          questionCode: "Q-SEC-PHYSICAL",
+          value: "Badge access, CCTV, locked server room",
+        },
+        { questionCode: "Q-SEC-ENCRYPT-REST", value: true },
+        {
+          questionCode: "Q-SEC-ENCRYPT-DB",
+          value: "AES-256 TDE on Postgres RDS",
+        },
+        {
+          questionCode: "Q-SEC-KEY-MGMT",
+          value: "AWS KMS CMK with annual rotation",
+        },
+        { questionCode: "Q-SEC-ENCRYPT-TRANSIT", value: true },
       ],
     })
     .expect(200);

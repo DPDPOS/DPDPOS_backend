@@ -19,6 +19,7 @@ import {
   evaluateSchema,
   evidenceBatchSchema,
   initiateDocumentSchema,
+  importQuestionnaireExcelSchema,
   questionnaireAnswersSchema,
   scanIdParamSchema,
   uploadDocumentSchema,
@@ -49,6 +50,14 @@ export function createAssessmentRouter(): Router {
     requirePermission(assessmentPermissions.read),
     (req, res, next) =>
       void assessmentController.questionnaireCatalog(req, res, next),
+  );
+
+  router.get(
+    "/questionnaire/template.xlsx",
+    authenticate,
+    requirePermission(assessmentPermissions.read),
+    (req, res, next) =>
+      void assessmentController.downloadQuestionnaireTemplate(req, res, next),
   );
 
   router.get(
@@ -118,6 +127,16 @@ export function createAssessmentRouter(): Router {
     validateBody(questionnaireAnswersSchema),
     (req, res, next) =>
       void assessmentController.saveQuestionnaire(req, res, next),
+  );
+
+  router.post(
+    "/:id/questionnaire/import",
+    authenticate,
+    requirePermission(assessmentPermissions.update),
+    validateParams(assessmentIdParamSchema),
+    validateBody(importQuestionnaireExcelSchema),
+    (req, res, next) =>
+      void assessmentController.importQuestionnaireExcel(req, res, next),
   );
 
   // JWT list of scans (FE status) — before CLI-authenticated scan routes

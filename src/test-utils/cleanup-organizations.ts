@@ -24,6 +24,7 @@ export async function deleteTestOrganizations(
     await prisma.scanJob.deleteMany({ where: orgWhere });
     await prisma.cliToken.deleteMany({ where: orgWhere });
     await prisma.questionnaireAnswer.deleteMany({ where: orgWhere });
+    await prisma.organizationOnboardingAnswer.deleteMany({ where: orgWhere });
     await prisma.assessmentDocument.deleteMany({ where: orgWhere });
     await prisma.assessmentVersion.deleteMany({ where: orgWhere });
     await prisma.assessment.deleteMany({ where: orgWhere });

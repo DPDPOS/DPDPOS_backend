@@ -7,7 +7,10 @@ const prisma = new PrismaClient();
 async function main() {
   const org = await prisma.organization.upsert({
     where: { id: "00000000-0000-4000-8000-000000000001" },
-    update: { industry: "banking_finance" },
+    update: {
+      industry: "banking_finance",
+      onboardingCompletedAt: new Date(),
+    },
     create: {
       id: "00000000-0000-4000-8000-000000000001",
       name: "Demo Data Fiduciary Pvt Ltd",
@@ -18,9 +21,11 @@ async function main() {
       maturityLevel: "Developing",
       isSignificantDataFiduciary: false,
       status: "ACTIVE",
+      onboardingCompletedAt: new Date(),
     },
   });
 
+  // Demo tenant is fully onboarded so assessments work without the wizard.
   const roleCreates = Object.entries(SYSTEM_ROLE_PRESETS).map(([name, permissions]) =>
     prisma.role.upsert({
       where: {

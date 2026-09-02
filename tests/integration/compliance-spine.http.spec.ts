@@ -6,6 +6,7 @@ import { prisma } from "../../src/infrastructure/database/prisma-client.js";
 import { signAccessToken } from "../../src/modules/auth/utils/jwt.js";
 import { ALL_PERMISSIONS } from "../../src/shared/constants/permissions.js";
 import { deleteTestOrganizations } from "../../src/test-utils/cleanup-organizations.js";
+import { markOrganizationOnboarded } from "../../src/test-utils/mark-organization-onboarded.js";
 
 function authHeader(organizationId: string, userId: string = randomUUID()): string {
   const token = signAccessToken({
@@ -34,6 +35,7 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
       .expect(201);
     organizationId = org.body.data.organization.id as string;
     userId = randomUUID();
+    await markOrganizationOnboarded(organizationId, userId);
   });
 
   afterAll(async () => {
@@ -119,6 +121,20 @@ describe("Compliance spine e2e (assessment → CLI → evaluate → report)", ()
           { questionCode: "Q-PRIVACY-OWNER", value: true },
           { questionCode: "Q-TRAINING", value: false },
           { questionCode: "Q-SDF", value: false },
+          {
+            questionCode: "Q-SEC-PHYSICAL",
+            value: "Badge access, CCTV, locked server room",
+          },
+          { questionCode: "Q-SEC-ENCRYPT-REST", value: true },
+          {
+            questionCode: "Q-SEC-ENCRYPT-DB",
+            value: "AES-256 TDE on Postgres RDS",
+          },
+          {
+            questionCode: "Q-SEC-KEY-MGMT",
+            value: "AWS KMS CMK with annual rotation",
+          },
+          { questionCode: "Q-SEC-ENCRYPT-TRANSIT", value: true },
         ],
       })
       .expect(200);

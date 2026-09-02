@@ -8,6 +8,8 @@ export type OrganizationRecord = {
   maturityLevel: string | null;
   isSignificantDataFiduciary: boolean;
   status: string;
+  onboardingCompletedAt: Date | null;
+  onboardingCompletedBy: string | null;
   createdBy: string | null;
   updatedBy: string | null;
   createdAt: Date;
@@ -25,6 +27,8 @@ export type OrganizationResponse = {
   maturityLevel: string | null;
   isSignificantDataFiduciary: boolean;
   status: string;
+  onboardingCompleted: boolean;
+  onboardingCompletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,6 +51,10 @@ export function toOrganizationResponse(
     maturityLevel: org.maturityLevel,
     isSignificantDataFiduciary: org.isSignificantDataFiduciary,
     status: org.status,
+    onboardingCompleted: Boolean(org.onboardingCompletedAt),
+    onboardingCompletedAt: org.onboardingCompletedAt
+      ? org.onboardingCompletedAt.toISOString()
+      : null,
     createdAt: org.createdAt.toISOString(),
     updatedAt: org.updatedAt.toISOString(),
   };

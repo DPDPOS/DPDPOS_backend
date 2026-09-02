@@ -23,10 +23,12 @@ import type {
   AcceptInviteDto,
   LoginDto,
   LogoutDto,
+  LookupOrganizationsDto,
   MfaConfirmDto,
   MfaVerifyDto,
   MfaResendDto,
   RefreshDto,
+  SignupDto,
 } from "../dto/auth.dto.js";
 import { AuthRepository, type AuthUserRecord } from "../repositories/auth.repository.js";
 import {
@@ -50,6 +52,10 @@ import {
   verifyMfaChallengeToken,
 } from "../utils/mfa-challenge-token.js";
 import { decryptSecret, encryptSecret } from "../utils/secret-crypto.js";
+import { OrganizationRepository } from "../../organizations/repositories/organization.repository.js";
+import { SYSTEM_ROLE_PRESETS } from "../../../shared/constants/permissions.js";
+import { isOrganizationOnboarded } from "../../onboarding/services/onboarding.service.js";
+import { toOrganizationResponse } from "../../organizations/types/organization.types.js";
 
 export type AuthTokens = {
   accessToken: string;
@@ -68,6 +74,10 @@ export type AuthMeResponse = {
   permissions: string[];
   mfaEnabled: boolean;
   mfaEnrollmentRequired: boolean;
+  /** Once-per-org DPDP onboarding; false until /onboarding/complete. */
+  onboardingCompleted: boolean;
+  /** Convenience for FE routing — same as !onboardingCompleted. */
+  requiresOnboarding: boolean;
 };
 
 export type LoginSuccessResult = {
@@ -104,7 +114,132 @@ export class AuthService {
   constructor(
     private readonly repo = new AuthRepository(),
     private readonly enqueueOtp = enqueueEmailOtp,
+    private readonly orgRepo = new OrganizationRepository(),
   ) {}
+
+  /**
+   * Open self-signup: creates tenant + ORG_ADMIN and returns a session.
+   * Caller must complete /api/v1/onboarding before creating assessments.
+   */
+  async signup(
+    input: SignupDto,
+    meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
+  ): Promise<LoginSuccessResult & { organization: ReturnType<typeof toOrganizationResponse> }> {
+    const email = input.email.trim().toLowerCase();
+    const passwordHash = await argon2.hash(input.password);
+    const correlationId = meta.correlationId ?? randomUUID();
+
+    const { organizationId, userId } = await withTransaction(async (tx) => {
+      const organization = await this.orgRepo.create(tx, {
+        name: input.organizationName.trim(),
+        industry: input.industry,
+        companySize: input.companySize,
+        operatingRegion: input.operatingRegion,
+        companyType: input.companyType,
+        maturityLevel: input.maturityLevel,
+        isSignificantDataFiduciary: input.isSignificantDataFiduciary,
+      });
+
+      await this.orgRepo.createSystemRoles(
+        tx,
+        organization.id,
+        Object.entries(SYSTEM_ROLE_PRESETS).map(([name, permissions]) => ({
+          name,
+          permissions: [...permissions],
+        })),
+      );
+
+      const adminRoleId = await this.repo.findSystemRoleId(
+        tx,
+        organization.id,
+        "ORG_ADMIN",
+      );
+      if (!adminRoleId) {
+        throw new ValidationError("Failed to provision ORG_ADMIN role");
+      }
+
+      const user = await this.repo.createActiveLocalUser(tx, {
+        organizationId: organization.id,
+        email,
+        name: input.adminName.trim(),
+        passwordHash,
+      });
+
+      await this.repo.assignRole(tx, {
+        organizationId: organization.id,
+        userId: user.id,
+        roleId: adminRoleId,
+        assignedBy: user.id,
+      });
+
+      await tx.organization.update({
+        where: { id: organization.id },
+        data: { createdBy: user.id, updatedBy: user.id },
+      });
+
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.OrganizationCreated,
+        organizationId: organization.id,
+        actorUserId: user.id,
+        correlationId,
+        payload: {
+          organizationId: organization.id,
+          name: organization.name,
+          systemRoles: Object.keys(SYSTEM_ROLE_PRESETS),
+          signup: true,
+        },
+      });
+
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.RoleAssigned,
+        organizationId: organization.id,
+        actorUserId: user.id,
+        correlationId,
+        payload: { userId: user.id, roleId: adminRoleId },
+      });
+
+      return { organizationId: organization.id, userId: user.id };
+    });
+
+    const user = await this.repo.findUserById({ organizationId, userId });
+    if (!user) {
+      throw new ValidationError("Signup completed but user could not be loaded");
+    }
+
+    const tokens = await this.issueSession(user, meta, {
+      emitLoginEvent: true,
+      activateIfInvited: false,
+      correlationId,
+      mfaVerified: !appConfig.auth.mfaEnabled,
+    });
+
+    const org = await this.orgRepo.findById(organizationId);
+    if (!org) {
+      throw new ValidationError("Signup completed but organization could not be loaded");
+    }
+
+    const privileged = isPrivilegedRoleSet(user.roleNames);
+    const mfaEnrollmentRequired =
+      appConfig.auth.mfaEnabled && privileged && !user.mfaEnabled;
+    const me = await this.toMeWithOnboarding(user, mfaEnrollmentRequired);
+
+    return {
+      mfaRequired: false,
+      user: me,
+      tokens,
+      mfaEnrollmentRequired,
+      organization: toOrganizationResponse(org),
+    };
+  }
+
+  async lookupOrganizations(
+    input: LookupOrganizationsDto,
+  ): Promise<{ organizations: Array<{ id: string; name: string; onboardingCompleted: boolean }> }> {
+    const organizations = await this.repo.listOrganizationsForEmail(
+      input.email.trim().toLowerCase(),
+    );
+    return { organizations };
+  }
 
   async login(
     input: LoginDto,
@@ -195,7 +330,7 @@ export class AuthService {
 
     return {
       mfaRequired: false,
-      user: this.toMe(
+      user: await this.toMeWithOnboarding(
         { ...user, status: user.status === "INVITED" ? "ACTIVE" : user.status },
         false,
       ),
@@ -398,7 +533,7 @@ export class AuthService {
       !appConfig.auth.mfaEnabled ||
       (user.authSource !== "LOCAL" &&
         (await this.shouldSkipLocalTotp(user.organizationId)));
-    return this.toMe(
+    return this.toMeWithOnboarding(
       user,
       appConfig.auth.mfaEnabled &&
         privileged &&
@@ -449,7 +584,7 @@ export class AuthService {
 
     return {
       mfaRequired: false,
-      user: this.toMe(
+      user: await this.toMeWithOnboarding(
         { ...user, status: activateIfInvited ? "ACTIVE" : user.status },
         appConfig.auth.mfaEnabled && privileged && !user.mfaEnabled && !skipLocalTotp,
       ),
@@ -541,7 +676,7 @@ export class AuthService {
 
     return {
       mfaRequired: false,
-      user: this.toMe(
+      user: await this.toMeWithOnboarding(
         { ...user, status: user.status === "INVITED" ? "ACTIVE" : user.status },
         false,
       ),
@@ -729,7 +864,7 @@ export class AuthService {
     return user;
   }
 
-  private toMe(
+  private async toMeWithOnboarding(
     user: {
       id: string;
       organizationId: string;
@@ -741,7 +876,10 @@ export class AuthService {
       mfaEnabled: boolean;
     },
     mfaEnrollmentRequired: boolean,
-  ): AuthMeResponse {
+  ): Promise<AuthMeResponse> {
+    const onboardingCompleted = await isOrganizationOnboarded(
+      user.organizationId,
+    );
     return {
       id: user.id,
       organizationId: user.organizationId,
@@ -752,6 +890,8 @@ export class AuthService {
       permissions: user.permissions,
       mfaEnabled: user.mfaEnabled,
       mfaEnrollmentRequired,
+      onboardingCompleted,
+      requiresOnboarding: !onboardingCompleted,
     };
   }
 

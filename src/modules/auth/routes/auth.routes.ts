@@ -6,14 +6,28 @@ import {
   acceptInviteDtoSchema,
   loginDtoSchema,
   logoutDtoSchema,
+  lookupOrganizationsDtoSchema,
   mfaConfirmDtoSchema,
   mfaResendDtoSchema,
   mfaVerifyDtoSchema,
   refreshDtoSchema,
+  signupDtoSchema,
 } from "../dto/auth.dto.js";
 
 export function createAuthRouter(): Router {
   const router = Router();
+
+  router.post(
+    "/signup",
+    validateBody(signupDtoSchema),
+    (req, res, next) => void authController.signup(req, res, next),
+  );
+
+  router.post(
+    "/lookup-organizations",
+    validateBody(lookupOrganizationsDtoSchema),
+    (req, res, next) => void authController.lookupOrganizations(req, res, next),
+  );
 
   router.post(
     "/login",

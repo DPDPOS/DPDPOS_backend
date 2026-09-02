@@ -135,6 +135,92 @@ export class AuthRepository extends BaseRepository {
     });
   }
 
+  async listOrganizationsForEmail(
+    email: string,
+  ): Promise<Array<{ id: string; name: string; onboardingCompleted: boolean }>> {
+    const rows = await prisma.user.findMany({
+      where: {
+        email: email.toLowerCase(),
+        deletedAt: null,
+        status: { not: "DISABLED" },
+        organization: { deletedAt: null },
+      },
+      select: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            onboardingCompletedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => ({
+      id: r.organization.id,
+      name: r.organization.name,
+      onboardingCompleted: Boolean(r.organization.onboardingCompletedAt),
+    }));
+  }
+
+  async createActiveLocalUser(
+    db: DbClient,
+    data: {
+      organizationId: string;
+      email: string;
+      name: string;
+      passwordHash: string;
+    },
+  ): Promise<{ id: string }> {
+    return db.user.create({
+      data: {
+        organizationId: data.organizationId,
+        email: data.email,
+        name: data.name,
+        passwordHash: data.passwordHash,
+        status: "ACTIVE",
+        authSource: "LOCAL",
+      },
+      select: { id: true },
+    });
+  }
+
+  async assignRole(
+    db: DbClient,
+    data: {
+      organizationId: string;
+      userId: string;
+      roleId: string;
+      assignedBy?: string;
+    },
+  ): Promise<void> {
+    await db.userRole.create({
+      data: {
+        organizationId: data.organizationId,
+        userId: data.userId,
+        roleId: data.roleId,
+        assignedBy: data.assignedBy,
+      },
+    });
+  }
+
+  async findSystemRoleId(
+    db: DbClient,
+    organizationId: string,
+    roleName: string,
+  ): Promise<string | null> {
+    const row = await db.role.findFirst({
+      where: {
+        organizationId,
+        name: roleName,
+        deletedAt: null,
+        isSystemRole: true,
+      },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
   async markLoginSuccess(
     db: DbClient,
     userId: string,

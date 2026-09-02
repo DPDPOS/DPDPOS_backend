@@ -37,7 +37,6 @@ import { createAgentRouter } from "../modules/agents/index.js";
 import { createOnboardingRouter } from "../modules/onboarding/index.js";
 import { createPluginRouter } from "../modules/plugins/index.js";
 import { createLedgerRouter } from "../modules/ledger/index.js";
-
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
     sendSuccess(res, { status: "ok" });
@@ -61,6 +60,7 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/auth`, createIdentityAuthRouter());
   app.use(`${v1}/identity`, createIdentityAdminRouter());
   app.use(`${v1}/organizations`, createOrganizationsRouter());
+  app.use(`${v1}/onboarding`, createOnboardingRouter());
   app.use(`${v1}/users`, createUsersRouter());
   app.use(`${v1}/roles`, createRolesRouter());
   app.use(`${v1}/departments`, createDepartmentsRouter());

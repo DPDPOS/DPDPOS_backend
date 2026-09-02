@@ -75,6 +75,9 @@ model Organization {
   maturityLevel              String?            @map("maturity_level")
   isSignificantDataFiduciary Boolean            @default(false) @map("is_significant_data_fiduciary")
   status                     OrganizationStatus @default(ACTIVE)
+  /// Set once when the org finishes prerequisite DPDP onboarding (not per-login).
+  onboardingCompletedAt      DateTime?          @map("onboarding_completed_at")
+  onboardingCompletedBy      String?            @map("onboarding_completed_by") @db.Uuid
   createdBy                  String?            @map("created_by") @db.Uuid
   updatedBy                  String?            @map("updated_by") @db.Uuid
   createdAt                  DateTime           @default(now()) @map("created_at")
@@ -106,6 +109,7 @@ model Organization {
   aiUsageLogs          AiUsageLog[]
   remediationTasks     RemediationTask[]
   assessments          Assessment[]
+  onboardingAnswers    OrganizationOnboardingAnswer[]
   identitySettings     OrganizationIdentitySettings?
   identityProviders    IdentityProvider[]
   identityGroupRoleMaps IdentityGroupRoleMap[]
@@ -124,6 +128,23 @@ model Organization {
   rulepacks             Rulepack[]
 
   @@map("organizations")
+}
+
+/// Once-per-org DPDP discovery answers (prerequisite before assessments).
+model OrganizationOnboardingAnswer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  questionCode   String   @map("question_code")
+  valueJson      Json     @map("value_json")
+  answeredBy     String?  @map("answered_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, questionCode])
+  @@index([organizationId])
+  @@map("organization_onboarding_answers")
 }
 
 model User {

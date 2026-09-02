@@ -1,5 +1,26 @@
 import { z } from "zod";
 
+export const signupDtoSchema = z
+  .object({
+    organizationName: z.string().trim().min(1).max(200),
+    adminName: z.string().trim().min(1).max(200),
+    email: z.string().trim().email().max(320),
+    password: z.string().min(8).max(200),
+    industry: z.string().trim().min(1).max(120).optional(),
+    companySize: z.string().trim().min(1).max(60).optional(),
+    operatingRegion: z.string().trim().min(1).max(60).optional(),
+    companyType: z.string().trim().min(1).max(60).optional(),
+    maturityLevel: z.string().trim().min(1).max(60).optional(),
+    isSignificantDataFiduciary: z.boolean().optional(),
+  })
+  .strict();
+
+export const lookupOrganizationsDtoSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+  })
+  .strict();
+
 export const loginDtoSchema = z
   .object({
     organizationId: z.string().uuid(),
@@ -46,6 +67,8 @@ export const mfaResendDtoSchema = z
   .object({ mfaToken: z.string().min(1) })
   .strict();
 
+export type SignupDto = z.infer<typeof signupDtoSchema>;
+export type LookupOrganizationsDto = z.infer<typeof lookupOrganizationsDtoSchema>;
 export type LoginDto = z.infer<typeof loginDtoSchema>;
 export type RefreshDto = z.infer<typeof refreshDtoSchema>;
 export type LogoutDto = z.infer<typeof logoutDtoSchema>;

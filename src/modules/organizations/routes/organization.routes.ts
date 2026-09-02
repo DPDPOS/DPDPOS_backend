@@ -16,7 +16,8 @@ import {
 export function createOrganizationsRouter(): Router {
   const router = Router();
 
-  // Bootstrap onboarding — public until platform-admin auth exists.
+  // Tenant bootstrap without an admin user — prefer POST /api/v1/auth/signup
+  // for self-serve org + first admin. Kept for tests / ops tooling.
   router.post(
     "/",
     validateBody(createOrganizationDtoSchema),

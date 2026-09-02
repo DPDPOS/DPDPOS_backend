@@ -10,14 +10,44 @@ import type {
   AcceptInviteDto,
   LoginDto,
   LogoutDto,
+  LookupOrganizationsDto,
   MfaConfirmDto,
   MfaResendDto,
   MfaVerifyDto,
   RefreshDto,
+  SignupDto,
 } from "../dto/auth.dto.js";
 import { authService } from "../services/auth.service.js";
 
 export class AuthController {
+  async signup(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const body = req.body as SignupDto;
+      const result = await authService.signup(body, {
+        userAgent: req.header("user-agent") ?? undefined,
+        ipAddress: req.ip,
+        correlationId: getCorrelationId(),
+      });
+      sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async lookupOrganizations(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const body = req.body as LookupOrganizationsDto;
+      const result = await authService.lookupOrganizations(body);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async login(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const body = req.body as LoginDto;

@@ -17,6 +17,9 @@ import {
 } from "../dto/agent.dto.js";
 import { authenticateAgent } from "../middleware/authenticate-agent.middleware.js";
 import { agentsPermissions } from "../permissions/agents.permissions.js";
+import { agentIntakeController } from "../intake/agent-intake.controller.js";
+import { agentIntakeSchema } from "../intake/agent-intake.dto.js";
+import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 
 export function createAgentRouter(): Router {
   const router = Router();
@@ -60,6 +63,15 @@ export function createAgentRouter(): Router {
     "/consent/snapshot",
     authenticateAgent,
     (req, res, next) => void agentController.consentSnapshot(req, res, next),
+  );
+
+  // Org agent enrollment intake (moved from /onboarding)
+  router.post(
+    "/intake",
+    authenticate,
+    requirePermission(PERMISSIONS.ONBOARDING_INTAKE),
+    validateBody(agentIntakeSchema),
+    (req, res, next) => void agentIntakeController.intake(req, res, next),
   );
 
   router.get(

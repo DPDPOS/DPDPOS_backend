@@ -1,88 +1,265 @@
-import { randomBytes } from "node:crypto";
-import type { Prisma } from "@prisma/client";
-import { hashToken } from "../../auth/utils/token-crypto.js";
-import { appConfig } from "../../../config/app.config.js";
-import type { RequestContext } from "../../../shared/types/request-context.js";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../../../shared/errors/app-error.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
-import type { AgentPrismaClient } from "../../agents/types/agent.types.js";
-import type { OnboardingIntakeDto } from "../dto/onboarding.dto.js";
+import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
+import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
+import type { RequestContext } from "../../../shared/types/request-context.js";
+import { organizationService } from "../../organizations/services/organization.service.js";
+import type {
+  OnboardingProfileDto,
+  SaveOnboardingAnswersDto,
+} from "../dto/onboarding.dto.js";
+import {
+  buildOnboardingCatalogPayload,
+  getOnboardingQuestions,
+  isAnswerProvided,
+  requiredOnboardingCodes,
+} from "../domain/onboarding-questionnaire.js";
+import { OnboardingRepository } from "../repositories/onboarding.repository.js";
+import {
+  buildQuestionnaireWorkbook,
+  parseQuestionnaireWorkbook,
+} from "../../assessments/domain/questionnaire-excel.js";
 
-const PLUGIN_BY_SYSTEM = {
-  postgres: "postgres",
-  mongo: "mongo",
-  salesforce: "salesforce",
-  rest: "rest",
-  "code-scanner": "code-scanner",
-  "vendor-scanner": "vendor-scanner",
-} as const;
+const PROFILE_REQUIRED_FIELDS = [
+  "industry",
+  "companySize",
+  "operatingRegion",
+  "companyType",
+  "maturityLevel",
+] as const;
+
+export type OnboardingStatusResponse = {
+  completed: boolean;
+  completedAt: string | null;
+  profileComplete: boolean;
+  missingProfileFields: string[];
+  requiredAnswerCount: number;
+  answeredRequiredCount: number;
+  missingQuestionCodes: string[];
+  /** FE should route here until completed; do not re-prompt after true. */
+  requiresOnboarding: boolean;
+};
 
 export class OnboardingService {
-  async intake(ctx: RequestContext, input: OnboardingIntakeDto) {
-    const systems = new Set(input.declaredSystems);
-    for (const vendor of input.tprmVendors) {
-      if (typeof vendor !== "string" && vendor.systemType) {
-        const normalized = vendor.systemType.toLowerCase();
-        if (normalized in PLUGIN_BY_SYSTEM) {
-          systems.add(normalized as keyof typeof PLUGIN_BY_SYSTEM);
-        }
+  constructor(private readonly repo = new OnboardingRepository()) {}
+
+  async getStatus(ctx: RequestContext): Promise<OnboardingStatusResponse> {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+
+    if (org.onboardingCompletedAt) {
+      return {
+        completed: true,
+        completedAt: org.onboardingCompletedAt.toISOString(),
+        profileComplete: true,
+        missingProfileFields: [],
+        requiredAnswerCount: 0,
+        answeredRequiredCount: 0,
+        missingQuestionCodes: [],
+        requiresOnboarding: false,
+      };
+    }
+
+    const missingProfileFields = PROFILE_REQUIRED_FIELDS.filter(
+      (field) => !org[field]?.trim(),
+    );
+    const answers = await this.repo.listAnswers(ctx.organizationId);
+    const answersByCode = new Map(
+      answers.map((a) => [a.questionCode, a.valueJson]),
+    );
+    const questions = getOnboardingQuestions(org.industry);
+    const requiredCodes = requiredOnboardingCodes(questions, answersByCode);
+    const missingQuestionCodes = requiredCodes.filter(
+      (code) => !isAnswerProvided(answersByCode.get(code)),
+    );
+
+    return {
+      completed: false,
+      completedAt: null,
+      profileComplete: missingProfileFields.length === 0,
+      missingProfileFields: [...missingProfileFields],
+      requiredAnswerCount: requiredCodes.length,
+      answeredRequiredCount: requiredCodes.length - missingQuestionCodes.length,
+      missingQuestionCodes,
+      requiresOnboarding: true,
+    };
+  }
+
+  async getCatalog(ctx: RequestContext) {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+    const catalog = buildOnboardingCatalogPayload(org.industry);
+    const answers = await this.repo.listAnswers(ctx.organizationId);
+    return {
+      ...catalog,
+      answers: answers.map((a) => ({
+        questionCode: a.questionCode,
+        value: a.valueJson,
+        updatedAt: a.updatedAt.toISOString(),
+      })),
+      status: await this.getStatus(ctx),
+    };
+  }
+
+  async updateProfile(ctx: RequestContext, input: OnboardingProfileDto) {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+    if (org.onboardingCompletedAt) {
+      throw new ConflictError(
+        "Onboarding is already complete; update organisation settings instead",
+      );
+    }
+
+    const organization = await organizationService.update(
+      ctx.organizationId,
+      input,
+      {
+        actorUserId: ctx.actorUserId,
+        correlationId: ctx.correlationId,
+      },
+    );
+    return {
+      organization,
+      status: await this.getStatus(ctx),
+    };
+  }
+
+  async saveAnswers(ctx: RequestContext, input: SaveOnboardingAnswersDto) {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+    if (org.onboardingCompletedAt) {
+      throw new ConflictError("Onboarding is already complete");
+    }
+
+    const allowed = new Set(
+      getOnboardingQuestions(org.industry).map((q) => q.code),
+    );
+    for (const answer of input.answers) {
+      if (!allowed.has(answer.questionCode)) {
+        throw new ValidationError(
+          `Unknown onboarding question code '${answer.questionCode}'`,
+        );
       }
     }
-    if (input.tprmVendors.length > 0) systems.add("vendor-scanner");
-    const requiredPlugins = [...systems].map((system) => PLUGIN_BY_SYSTEM[system]);
 
-    const rawToken = `agent_enroll_${randomBytes(32).toString("base64url")}`;
-    const ttlHours = Number(process.env.AGENT_ENROLLMENT_TOKEN_TTL_HOURS ?? 24);
-    const expiresAt = new Date(Date.now() + ttlHours * 3_600_000);
-    const scopeProfile = {
-      agentModeEnabled: true,
-      deploymentTier: input.deploymentTier,
-      networkScope: input.networkScope,
-      tprmVendors: input.tprmVendors,
-      declaredPurposes: input.declaredPurposes,
-      declaredSystems: [...systems],
-      requiredPlugins,
-      zoneName: input.zoneName ?? "default",
+    const saved = await withTransaction(async (tx) =>
+      this.repo.upsertAnswers(tx, {
+        organizationId: ctx.organizationId,
+        answeredBy: ctx.actorUserId,
+        answers: input.answers.map((a) => ({
+          questionCode: a.questionCode,
+          value: a.value,
+        })),
+      }),
+    );
+
+    return {
+      saved,
+      status: await this.getStatus(ctx),
     };
+  }
 
-    const settings = await withTransaction(async (tx) => {
-      const db = tx as unknown as AgentPrismaClient;
-      const row = await db.organizationControlPlaneSettings.upsert({
-        where: { organizationId: ctx.organizationId },
-        create: {
+  async downloadQuestionnaireTemplate(ctx: RequestContext): Promise<{
+    buffer: Buffer;
+    fileName: string;
+  }> {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+    const questions = getOnboardingQuestions(org.industry);
+    const answers = await this.repo.listAnswers(ctx.organizationId);
+    const existing = new Map(
+      answers.map((a) => [a.questionCode, a.valueJson] as const),
+    );
+    const buffer = await buildQuestionnaireWorkbook(questions, {
+      title: "DPDPOS organisation onboarding questionnaire",
+      existingAnswers: existing,
+    });
+    return {
+      buffer,
+      fileName: `dpdpos-onboarding-questionnaire-${org.industry ?? "core"}.xlsx`,
+    };
+  }
+
+  async importQuestionnaireExcel(ctx: RequestContext, contentBase64: string) {
+    const org = await this.repo.getOnboardingFlags(ctx.organizationId);
+    if (!org) throw new NotFoundError("Organization not found");
+    if (org.onboardingCompletedAt) {
+      throw new ConflictError("Onboarding is already complete");
+    }
+    const questions = getOnboardingQuestions(org.industry);
+    const rows = await parseQuestionnaireWorkbook(
+      Buffer.from(contentBase64, "base64"),
+      questions,
+    );
+    return this.saveAnswers(ctx, {
+      answers: rows.map((r) => ({
+        questionCode: r.questionCode,
+        value: r.value,
+      })),
+    });
+  }
+
+  async complete(ctx: RequestContext) {
+    const status = await this.getStatus(ctx);
+    if (status.completed) {
+      return {
+        completed: true as const,
+        completedAt: status.completedAt,
+        alreadyComplete: true as const,
+      };
+    }
+
+    if (!status.profileComplete) {
+      throw new ValidationError(
+        `Complete organisation profile before finishing onboarding (missing: ${status.missingProfileFields.join(", ")})`,
+      );
+    }
+    if (status.missingQuestionCodes.length > 0) {
+      throw new ValidationError(
+        `Answer all required DPDP questions before finishing onboarding (missing: ${status.missingQuestionCodes.slice(0, 8).join(", ")})`,
+      );
+    }
+
+    const completedAt = new Date();
+    const answeredCount = status.answeredRequiredCount;
+
+    await withTransaction(async (tx) => {
+      await this.repo.markCompleted(tx, {
+        organizationId: ctx.organizationId,
+        completedBy: ctx.actorUserId,
+        completedAt,
+      });
+      await writeOutboxEvent(tx, {
+        eventType: DOMAIN_EVENTS.OrganizationOnboarded,
+        organizationId: ctx.organizationId,
+        actorUserId: ctx.actorUserId,
+        correlationId: ctx.correlationId,
+        payload: {
           organizationId: ctx.organizationId,
-          deploymentTier: input.deploymentTier,
-          agentMtlsRequired: process.env.AGENT_MTLS_ENABLED === "true",
-          scopeProfileJson: scopeProfile as Prisma.InputJsonValue,
-        },
-        update: {
-          deploymentTier: input.deploymentTier,
-          agentMtlsRequired: process.env.AGENT_MTLS_ENABLED === "true",
-          scopeProfileJson: scopeProfile as Prisma.InputJsonValue,
+          completedAt: completedAt.toISOString(),
+          answeredCount,
         },
       });
-      await db.agentEnrollmentToken.create({
-        data: {
-          organizationId: ctx.organizationId,
-          tokenHash: hashToken(rawToken),
-          tokenPrefix: rawToken.slice(0, 18),
-          scopeProfileJson: scopeProfile as Prisma.InputJsonValue,
-          expiresAt,
-          createdBy: ctx.actorUserId,
-        },
-      });
-      return row;
     });
 
     return {
-      settings,
-      enrollmentToken: rawToken,
-      installCommand:
-        `dpdpos-agent install --api ${appConfig.apiPublicUrl} ` +
-        `--token ${rawToken} --zone ${input.zoneName ?? "default"}`,
-      expiresAt,
-      requiredPlugins,
+      completed: true as const,
+      completedAt: completedAt.toISOString(),
+      alreadyComplete: false as const,
     };
   }
 }
 
 export const onboardingService = new OnboardingService();
+
+/** Used by assessment gate and /auth/me. */
+export async function isOrganizationOnboarded(
+  organizationId: string,
+): Promise<boolean> {
+  const row = await new OnboardingRepository().getOnboardingFlags(organizationId);
+  return Boolean(row?.onboardingCompletedAt);
+}

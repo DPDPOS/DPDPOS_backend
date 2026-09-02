@@ -39,6 +39,8 @@ function mapOrganization(row: PrismaOrganization): OrganizationRecord {
     maturityLevel: row.maturityLevel,
     isSignificantDataFiduciary: row.isSignificantDataFiduciary,
     status: row.status,
+    onboardingCompletedAt: row.onboardingCompletedAt,
+    onboardingCompletedBy: row.onboardingCompletedBy,
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
     createdAt: row.createdAt,

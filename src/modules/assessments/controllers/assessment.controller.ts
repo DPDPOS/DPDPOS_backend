@@ -64,6 +64,50 @@ export class AssessmentController {
     }
   }
 
+  async downloadQuestionnaireTemplate(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const { buffer, fileName } =
+        await assessmentService.downloadQuestionnaireTemplate(
+          getRequestContext(req),
+        );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${fileName}"`,
+      );
+      res.status(200).send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async importQuestionnaireExcel(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const body = req.body as { contentBase64: string };
+      sendSuccess(
+        res,
+        await assessmentService.importQuestionnaireExcel(
+          getRequestContext(req),
+          param(req.params.id, "id"),
+          body.contentBase64,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       sendSuccess(

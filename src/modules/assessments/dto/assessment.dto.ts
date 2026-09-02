@@ -65,6 +65,14 @@ export const questionnaireAnswersSchema = z.object({
 });
 export type QuestionnaireAnswersDto = z.infer<typeof questionnaireAnswersSchema>;
 
+export const importQuestionnaireExcelSchema = z.object({
+  fileName: z.string().min(1).max(255).optional(),
+  contentBase64: z.string().min(32),
+});
+export type ImportQuestionnaireExcelDto = z.infer<
+  typeof importQuestionnaireExcelSchema
+>;
+
 export const createCliTokenSchema = z.object({
   label: z.string().min(1).max(100),
   expiresInDays: z.number().int().positive().max(365).optional(),

@@ -1,25 +1,44 @@
 import { z } from "zod";
 
-export const onboardingIntakeSchema = z.object({
-  deploymentTier: z.enum(["COMMUNITY", "ENTERPRISE", "MANAGED"]),
-  networkScope: z.object({
-    vpcCidrs: z.array(z.string().trim().min(1)).max(100).default([]),
-    k8sNamespaces: z.array(z.string().trim().min(1)).max(500).default([]),
-  }),
-  tprmVendors: z.array(
-    z.union([
-      z.string().trim().min(1),
-      z.object({
-        name: z.string().trim().min(1),
-        systemType: z.string().trim().min(1).optional(),
-      }),
-    ]),
-  ).max(1_000).default([]),
-  declaredPurposes: z.array(z.string().trim().min(1)).max(1_000).default([]),
-  declaredSystems: z.array(
-    z.enum(["postgres", "mongo", "salesforce", "rest", "code-scanner", "vendor-scanner"]),
-  ).max(100).default([]),
-  zoneName: z.string().trim().min(1).max(120).optional(),
-});
+export const onboardingAnswerItemSchema = z
+  .object({
+    questionCode: z.string().trim().min(1).max(120),
+    value: z.union([z.boolean(), z.string(), z.number(), z.null()]),
+  })
+  .strict();
 
-export type OnboardingIntakeDto = z.infer<typeof onboardingIntakeSchema>;
+export const saveOnboardingAnswersDtoSchema = z
+  .object({
+    answers: z.array(onboardingAnswerItemSchema).min(1).max(200),
+  })
+  .strict();
+
+export const onboardingProfileDtoSchema = z
+  .object({
+    industry: z.string().trim().min(1).max(120).optional(),
+    companySize: z.string().trim().min(1).max(60).optional(),
+    operatingRegion: z.string().trim().min(1).max(60).optional(),
+    companyType: z.string().trim().min(1).max(60).optional(),
+    maturityLevel: z.string().trim().min(1).max(60).optional(),
+    isSignificantDataFiduciary: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one profile field is required",
+  });
+
+export type SaveOnboardingAnswersDto = z.infer<
+  typeof saveOnboardingAnswersDtoSchema
+>;
+export type OnboardingProfileDto = z.infer<typeof onboardingProfileDtoSchema>;
+
+export const importOnboardingExcelSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(255).optional(),
+    contentBase64: z.string().min(32),
+  })
+  .strict();
+
+export type ImportOnboardingExcelDto = z.infer<
+  typeof importOnboardingExcelSchema
+>;

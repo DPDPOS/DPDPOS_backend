@@ -458,4 +458,60 @@ export const CORE_QUESTIONNAIRE: QuestionnaireQuestion[] = [
     required: true,
     showIf: { code: "Q-SDF", equals: true },
   },
+
+  // --- Security safeguards (also exported in Excel workbook) -----------------
+  {
+    code: "Q-SEC-PHYSICAL",
+    stageId: "security_safeguards",
+    stageLabel: "Security safeguards",
+    stageOrder: 8,
+    label:
+      "Describe physical security controls for premises / data centres that store personal data",
+    helpText:
+      "Access badges, CCTV, visitor logs, locked server rooms, co-lo provider controls, etc.",
+    valueType: "string",
+    required: true,
+  },
+  {
+    code: "Q-SEC-ENCRYPT-REST",
+    stageId: "security_safeguards",
+    stageLabel: "Security safeguards",
+    stageOrder: 8,
+    label: "Is personal data encrypted at rest in primary storage systems?",
+    helpText: "Disk / volume / application-level encryption for databases and object stores.",
+    valueType: "boolean",
+    required: true,
+  },
+  {
+    code: "Q-SEC-ENCRYPT-DB",
+    stageId: "security_safeguards",
+    stageLabel: "Security safeguards",
+    stageOrder: 8,
+    label:
+      "Describe how databases encrypt personal data (algorithm, TDE/column, managed service)",
+    helpText:
+      "e.g. AES-256 TDE on Postgres RDS, column encryption for PAN, Mongo field-level encryption.",
+    valueType: "string",
+    required: true,
+  },
+  {
+    code: "Q-SEC-KEY-MGMT",
+    stageId: "security_safeguards",
+    stageLabel: "Security safeguards",
+    stageOrder: 8,
+    label: "How are encryption keys managed and rotated?",
+    helpText: "KMS/HSM, customer-managed keys, rotation cadence, access to key material.",
+    valueType: "string",
+    required: true,
+  },
+  {
+    code: "Q-SEC-ENCRYPT-TRANSIT",
+    stageId: "security_safeguards",
+    stageLabel: "Security safeguards",
+    stageOrder: 8,
+    label: "Is personal data encrypted in transit (TLS) for apps, APIs and admin access?",
+    helpText: "TLS 1.2+ for public and internal APIs, VPN/SSH for admin paths.",
+    valueType: "boolean",
+    required: true,
+  },
 ];
