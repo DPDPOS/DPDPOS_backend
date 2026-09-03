@@ -1,7 +1,8 @@
-import { NotFoundError, ConflictError } from "../../../shared/errors/app-error.js";
+import { NotFoundError, ConflictError, ValidationError } from "../../../shared/errors/app-error.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
 
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
@@ -19,6 +20,15 @@ import {
 } from "../types/consent-record.types.js";
 import { publishConsentInvalidation } from "../../../infrastructure/cache/consent-invalidation.js";
 
+function normalizePurposes(input: CreateConsentRecordDto): string[] {
+  const fromArray = (input.purposes ?? [])
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (fromArray.length > 0) return [...new Set(fromArray)];
+  const single = input.purpose?.trim();
+  return single ? [single] : [];
+}
+
 export class ConsentRecordService {
   constructor(
     private readonly repository = new ConsentRecordRepository(),
@@ -26,12 +36,35 @@ export class ConsentRecordService {
     private readonly dataAssetRepository = new DataAssetRepository(),
   ) {}
 
+  private async assertProofFileInOrg(
+    organizationId: string,
+    proofFileId: string | undefined,
+  ): Promise<void> {
+    if (!proofFileId) return;
+    const file = await prisma.evidenceFile.findFirst({
+      where: {
+        id: proofFileId,
+        organizationId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!file) {
+      throw new ValidationError(
+        "proofFileId must reference an evidence file in this organisation",
+      );
+    }
+  }
+
   async create(
     ctx: RequestContext,
     input: CreateConsentRecordDto,
   ): Promise<ConsentRecordResponse> {
-    // Business rule: any referenced notice or data asset must belong to the
-    // caller's organization.
+    const purposes = normalizePurposes(input);
+    if (purposes.length === 0) {
+      throw new ValidationError("purpose or purposes is required");
+    }
+
     if (input.noticeId) {
       const notice = await this.noticeRepository.findById(
         ctx.organizationId,
@@ -54,15 +87,24 @@ export class ConsentRecordService {
       }
     }
 
+    await this.assertProofFileInOrg(ctx.organizationId, input.proofFileId);
+
     return withTransaction(async (tx) => {
       const record = await this.repository.create(tx, ctx, {
         dataSubjectIdentifier: input.dataSubjectIdentifier,
         noticeId: input.noticeId,
         dataAssetId: input.dataAssetId,
-        purpose: input.purpose,
+        purpose: purposes[0]!,
+        purposes,
         grantedAt: input.grantedAt
           ? new Date(input.grantedAt)
           : undefined,
+        expiresAt:
+          input.expiresAt === null
+            ? null
+            : input.expiresAt
+              ? new Date(input.expiresAt)
+              : undefined,
         proofFileId: input.proofFileId,
       });
 
@@ -74,6 +116,7 @@ export class ConsentRecordService {
         payload: {
           consentRecordId: record.id,
           purpose: record.purpose,
+          purposes: record.purposes,
         },
       });
 

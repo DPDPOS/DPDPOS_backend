@@ -1,18 +1,29 @@
 import { z } from "zod";
 
-export const createConsentRecordDtoSchema = z.object({
-  dataSubjectIdentifier: z.string().trim().min(1).max(500),
+export const createConsentRecordDtoSchema = z
+  .object({
+    dataSubjectIdentifier: z.string().trim().min(1).max(500),
 
-  noticeId: z.string().uuid().optional(),
+    noticeId: z.string().uuid().optional(),
 
-  dataAssetId: z.string().uuid().optional(),
+    dataAssetId: z.string().uuid().optional(),
 
-  purpose: z.string().trim().min(1).max(255),
+    /** Back-compat singular purpose. */
+    purpose: z.string().trim().min(1).max(255).optional(),
 
-  grantedAt: z.string().datetime().optional(),
+    /** Preferred multi-purpose list. */
+    purposes: z.array(z.string().trim().min(1).max(255)).min(1).max(20).optional(),
 
-  proofFileId: z.string().trim().max(255).optional(),
-});
+    grantedAt: z.string().datetime().optional(),
+
+    expiresAt: z.string().datetime().nullable().optional(),
+
+    proofFileId: z.string().uuid().optional(),
+  })
+  .refine((v) => Boolean(v.purpose?.trim()) || (v.purposes && v.purposes.length > 0), {
+    message: "purpose or purposes is required",
+    path: ["purpose"],
+  });
 
 export type CreateConsentRecordDto = z.infer<
   typeof createConsentRecordDtoSchema

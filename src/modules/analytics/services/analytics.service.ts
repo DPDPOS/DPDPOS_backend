@@ -74,8 +74,11 @@ export class AnalyticsService {
     return this.repo.getRightsRequestMetrics(ctx.organizationId);
   }
 
-  async getConsentMetrics(ctx: RequestContext): Promise<ConsentMetrics> {
-    return this.repo.getConsentMetrics(ctx.organizationId);
+  async getConsentMetrics(
+    ctx: RequestContext,
+    options: { from?: Date; to?: Date } = {},
+  ): Promise<ConsentMetrics> {
+    return this.repo.getConsentMetrics(ctx.organizationId, options);
   }
 
   async getDashboardOverview(ctx: RequestContext): Promise<DashboardOverview> {

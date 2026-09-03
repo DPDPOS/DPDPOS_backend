@@ -21,6 +21,10 @@ export const updateOrganizationDtoSchema = z
     companyType: z.string().trim().min(1).max(60).nullable().optional(),
     maturityLevel: z.string().trim().min(1).max(60).nullable().optional(),
     isSignificantDataFiduciary: z.boolean().optional(),
+    consentManagerMode: z.enum(["NONE", "EXTERNAL_CM"]).optional(),
+    consentManagerUrl: z.string().trim().url().max(2000).nullable().optional(),
+    consentManagerWebhookSecret: z.string().trim().min(8).max(200).nullable().optional(),
+    dsrRoutingJson: z.record(z.string(), z.string().uuid()).nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

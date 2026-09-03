@@ -75,6 +75,13 @@ model Organization {
   maturityLevel              String?            @map("maturity_level")
   isSignificantDataFiduciary Boolean            @default(false) @map("is_significant_data_fiduciary")
   status                     OrganizationStatus @default(ACTIVE)
+  consentManagerMode         ConsentManagerMode @default(NONE) @map("consent_manager_mode")
+  consentManagerUrl          String?            @map("consent_manager_url")
+  /// Shared secret for CM webhook stub (`X-CM-Api-Key`).
+  consentManagerWebhookSecret String?           @map("consent_manager_webhook_secret")
+  /// Grievance routing map: `{ "<DataSubjectRequestType>": "<userId>" }`.
+  /// Applied on DSR submit when the caller omits an explicit assignee.
+  dsrRoutingJson             Json?              @map("dsr_routing_json")
   /// Set once when the org finishes prerequisite DPDP onboarding (not per-login).
   onboardingCompletedAt      DateTime?          @map("onboarding_completed_at")
   onboardingCompletedBy      String?            @map("onboarding_completed_by") @db.Uuid
@@ -503,6 +510,8 @@ model DataAsset {
 
   storageLocation String? @map("storage_location")
   retentionPeriod String? @map("retention_period")
+  /// ISO-3166 alpha-2 codes where the asset is stored or replicated.
+  countries       String[]        @default([])
   source          DataAssetSource @default(MANUAL)
   systemId        String?         @map("system_id") @db.Uuid
   agentId         String?         @map("agent_id") @db.Uuid
@@ -531,6 +540,8 @@ model DataAsset {
   agent                Agent? @relation(fields: [agentId], references: [id])
   dataFields           DataField[]
   complianceFindings   ComplianceFinding[]
+  outgoingLinks        DataAssetLink[] @relation("DataAssetLinkFrom")
+  incomingLinks        DataAssetLink[] @relation("DataAssetLinkTo")
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -538,6 +549,40 @@ model DataAsset {
   @@index([systemId])
   @@index([agentId])
   @@map("data_assets")
+}
+
+enum DataAssetLinkType {
+  FEEDS
+  DERIVES
+  COPIES
+}
+
+/// Directed edge between two assets, used to render the org data-flow graph.
+model DataAssetLink {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  fromAssetId    String @map("from_asset_id") @db.Uuid
+  toAssetId      String @map("to_asset_id") @db.Uuid
+
+  linkType DataAssetLinkType @map("link_type")
+  notes    String?
+
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  fromAsset DataAsset @relation("DataAssetLinkFrom", fields: [fromAssetId], references: [id])
+  toAsset   DataAsset @relation("DataAssetLinkTo", fields: [toAssetId], references: [id])
+
+  @@unique([organizationId, fromAssetId, toAssetId, linkType])
+  @@index([organizationId])
+  @@index([fromAssetId])
+  @@index([toAssetId])
+  @@map("data_asset_links")
 }
 
 model ProcessingActivity {
@@ -554,6 +599,8 @@ model ProcessingActivity {
   legalBasis    String? @map("legal_basis")
   retentionRule String? @map("retention_rule")
   notes         String?
+  /// ISO-3166 alpha-2 codes the activity transfers personal data to.
+  countries     String[] @default([])
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -664,11 +711,36 @@ model Vendor {
   parentRelationships  VendorRelationship[] @relation("VendorParent")
   childRelationships   VendorRelationship[] @relation("VendorChild")
   erasureChecklistItems ErasureChecklistItem[]
+  portalTokens          VendorPortalToken[]
 
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, criticality])
   @@map("vendors")
+}
+
+/// Magic-link token for limited vendor self-service (profile + DPA evidence + reviews).
+model VendorPortalToken {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+  vendorId       String @map("vendor_id") @db.Uuid
+
+  tokenHash   String    @unique @map("token_hash")
+  tokenPrefix String    @map("token_prefix")
+  contactEmail String?  @map("contact_email")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+
+  createdBy String? @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId])
+  @@index([vendorId])
+  @@map("vendor_portal_tokens")
 }
 
 model VendorRelationship {
@@ -799,16 +871,27 @@ enum ConsentState {
   WITHDRAWN
 }
 
+enum NoticeContentFormat {
+  PLAIN
+  MARKDOWN
+}
+
+enum ConsentManagerMode {
+  NONE
+  EXTERNAL_CM
+}
+
 model Notice {
   id String @id @default(uuid()) @db.Uuid
 
   organizationId String @map("organization_id") @db.Uuid
 
   title         String
-  version       Int       @default(1)
+  version       Int                 @default(1)
   content       String
-  effectiveFrom DateTime? @map("effective_from")
-  publishedBy   String?   @map("published_by") @db.Uuid
+  contentFormat NoticeContentFormat @default(PLAIN) @map("content_format")
+  effectiveFrom DateTime?           @map("effective_from")
+  publishedBy   String?             @map("published_by") @db.Uuid
 
   createdBy String? @map("created_by") @db.Uuid
   updatedBy String? @map("updated_by") @db.Uuid
@@ -835,9 +918,12 @@ model ConsentRecord {
   dataAssetId           String? @map("data_asset_id") @db.Uuid
 
   purpose      String
+  /// Granular purposes; `purpose` remains the primary/first for back-compat.
+  purposes     Json         @default("[]")
   consentState ConsentState @default(GRANTED) @map("consent_state")
   grantedAt    DateTime     @default(now()) @map("granted_at")
   withdrawnAt  DateTime?    @map("withdrawn_at")
+  expiresAt    DateTime?    @map("expires_at")
   proofFileId  String?      @map("proof_file_id")
 
   createdBy String? @map("created_by") @db.Uuid
@@ -857,6 +943,7 @@ model ConsentRecord {
   @@index([dataSubjectIdentifier])
   @@index([noticeId])
   @@index([dataAssetId])
+  @@index([organizationId, expiresAt])
   @@map("consent_records")
 }
 
@@ -904,6 +991,9 @@ model DataSubjectRequest {
   softDeletedAt     DateTime? @map("soft_deleted_at")
   hardDeletedAt     DateTime? @map("hard_deleted_at")
   erasureEvidenceJson Json?   @map("erasure_evidence_json")
+  /// Lightweight staff verification steps, seeded from linked vendors on
+  /// ERASURE submit: `[{ key, label, vendorId, pending, notes }]`.
+  verificationChecklistJson Json? @map("verification_checklist_json")
 
   resolutionSummary String? @map("resolution_summary")
 

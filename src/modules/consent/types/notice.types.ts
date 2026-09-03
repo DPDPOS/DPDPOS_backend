@@ -5,6 +5,7 @@ export type NoticeRecord = {
   title: string;
   version: number;
   content: string;
+  contentFormat: "PLAIN" | "MARKDOWN";
   effectiveFrom: Date | null;
   publishedBy: string | null;
 
@@ -22,6 +23,7 @@ export type NoticeResponse = {
   title: string;
   version: number;
   content: string;
+  contentFormat: "PLAIN" | "MARKDOWN";
   effectiveFrom: string | null;
   publishedBy: string | null;
 
@@ -36,6 +38,7 @@ export function toNoticeResponse(notice: NoticeRecord): NoticeResponse {
     title: notice.title,
     version: notice.version,
     content: notice.content,
+    contentFormat: notice.contentFormat,
     effectiveFrom: notice.effectiveFrom
       ? notice.effectiveFrom.toISOString()
       : null,

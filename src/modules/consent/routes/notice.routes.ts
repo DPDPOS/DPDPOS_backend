@@ -4,6 +4,7 @@ import { authenticate } from "../../../shared/middleware/authenticate.middleware
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../../shared/middleware/validate.middleware.js";
 import { requirePermission } from "../../../shared/guards/permission.guard.js";
 
@@ -12,6 +13,7 @@ import { noticePermissions } from "../permissions/notice.permissions.js";
 
 import {
   createNoticeDtoSchema,
+  noticeDiffQuerySchema,
   noticeIdParamSchema,
 } from "../dto/notice.dto.js";
 
@@ -33,6 +35,16 @@ export function createNoticeRouter(): Router {
     requirePermission(noticePermissions.read),
     (req, res, next) =>
       void noticeController.list(req, res, next),
+  );
+
+  router.get(
+    "/:id/diff",
+    authenticate,
+    requirePermission(noticePermissions.read),
+    validateParams(noticeIdParamSchema),
+    validateQuery(noticeDiffQuerySchema),
+    (req, res, next) =>
+      void noticeController.diff(req, res, next),
   );
 
   router.get(

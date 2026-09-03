@@ -12,6 +12,7 @@ export type VendorValidationSnapshot = {
   hasActiveDpa: boolean;
   latestReviewOutcome: string | null;
   crossBorderAllowed: boolean;
+  countries: string[];
 };
 
 export type ControlValidationSnapshot = {
@@ -26,6 +27,8 @@ export type OrganizationValidationSnapshot = {
   processesChildrenData: boolean;
   hasDpoUser: boolean;
   frameworkId: string | null;
+  consentManagerMode?: "NONE" | "EXTERNAL_CM";
+  consentManagerUrl?: string | null;
 };
 
 export type OpenFindingValidationSnapshot = {

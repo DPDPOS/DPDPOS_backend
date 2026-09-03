@@ -8,7 +8,10 @@ import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { BaseRepository } from "../../../shared/repository/base.repository.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
-import type { ConsentRecordRecord } from "../types/consent-record.types.js";
+import {
+  asStringArray,
+  type ConsentRecordRecord,
+} from "../types/consent-record.types.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -17,7 +20,9 @@ export type CreateConsentRecordData = {
   noticeId?: string;
   dataAssetId?: string;
   purpose: string;
+  purposes: string[];
   grantedAt?: Date;
+  expiresAt?: Date | null;
   proofFileId?: string;
 };
 
@@ -29,9 +34,8 @@ export type ListConsentRecordsOptions = {
   includeDeleted?: boolean;
 };
 
-function mapConsentRecord(
-  row: PrismaConsentRecord,
-): ConsentRecordRecord {
+function mapConsentRecord(row: PrismaConsentRecord): ConsentRecordRecord {
+  const purposes = asStringArray(row.purposes);
   return {
     id: row.id,
 
@@ -41,10 +45,12 @@ function mapConsentRecord(
     noticeId: row.noticeId,
     dataAssetId: row.dataAssetId,
 
-    purpose: row.purpose,
+    purpose: purposes[0] ?? row.purpose,
+    purposes: purposes.length > 0 ? purposes : row.purpose ? [row.purpose] : [],
     consentState: row.consentState,
     grantedAt: row.grantedAt,
     withdrawnAt: row.withdrawnAt,
+    expiresAt: row.expiresAt,
     proofFileId: row.proofFileId,
 
     createdBy: row.createdBy,
@@ -118,7 +124,9 @@ export class ConsentRecordRepository extends BaseRepository {
         dataAssetId: data.dataAssetId,
 
         purpose: data.purpose,
+        purposes: data.purposes,
         grantedAt: data.grantedAt,
+        expiresAt: data.expiresAt ?? undefined,
         proofFileId: data.proofFileId,
 
         ...this.auditCreateFields(ctx),

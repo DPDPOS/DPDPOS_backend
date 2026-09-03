@@ -1,4 +1,4 @@
-import type { Prisma, Notice as PrismaNotice } from "@prisma/client";
+import type { Prisma, Notice as PrismaNotice, NoticeContentFormat } from "@prisma/client";
 
 import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { BaseRepository } from "../../../shared/repository/base.repository.js";
@@ -12,6 +12,7 @@ export type CreateNoticeData = {
   title: string;
   version: number;
   content: string;
+  contentFormat?: NoticeContentFormat;
   effectiveFrom?: Date;
 };
 
@@ -24,6 +25,7 @@ function mapNotice(row: PrismaNotice): NoticeRecord {
     title: row.title,
     version: row.version,
     content: row.content,
+    contentFormat: row.contentFormat,
     effectiveFrom: row.effectiveFrom,
     publishedBy: row.publishedBy,
 
@@ -52,6 +54,21 @@ export class NoticeRepository extends BaseRepository {
       },
     });
 
+    return row ? mapNotice(row) : null;
+  }
+
+  async findByTitleAndVersion(
+    organizationId: string,
+    title: string,
+    version: number,
+  ): Promise<NoticeRecord | null> {
+    const row = await prisma.notice.findFirst({
+      where: {
+        title,
+        version,
+        ...this.tenantWhere({ organizationId }),
+      },
+    });
     return row ? mapNotice(row) : null;
   }
 
@@ -101,6 +118,7 @@ export class NoticeRepository extends BaseRepository {
         title: data.title,
         version: data.version,
         content: data.content,
+        contentFormat: data.contentFormat ?? "PLAIN",
         effectiveFrom: data.effectiveFrom,
         publishedBy: ctx.actorUserId,
 

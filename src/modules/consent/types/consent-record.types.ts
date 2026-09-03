@@ -9,9 +9,11 @@ export type ConsentRecordRecord = {
   dataAssetId: string | null;
 
   purpose: string;
+  purposes: string[];
   consentState: ConsentState;
   grantedAt: Date;
   withdrawnAt: Date | null;
+  expiresAt: Date | null;
   proofFileId: string | null;
 
   createdBy: string | null;
@@ -30,18 +32,31 @@ export type ConsentRecordResponse = {
   dataAssetId: string | null;
 
   purpose: string;
+  purposes: string[];
   consentState: string;
   grantedAt: string;
   withdrawnAt: string | null;
+  expiresAt: string | null;
   proofFileId: string | null;
 
   createdAt: string;
   updatedAt: string;
 };
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
+}
+
 export function toConsentRecordResponse(
   record: ConsentRecordRecord,
 ): ConsentRecordResponse {
+  const purposes =
+    record.purposes.length > 0
+      ? record.purposes
+      : record.purpose
+        ? [record.purpose]
+        : [];
   return {
     id: record.id,
 
@@ -49,15 +64,19 @@ export function toConsentRecordResponse(
     noticeId: record.noticeId,
     dataAssetId: record.dataAssetId,
 
-    purpose: record.purpose,
+    purpose: purposes[0] ?? record.purpose,
+    purposes,
     consentState: record.consentState,
     grantedAt: record.grantedAt.toISOString(),
     withdrawnAt: record.withdrawnAt
       ? record.withdrawnAt.toISOString()
       : null,
+    expiresAt: record.expiresAt ? record.expiresAt.toISOString() : null,
     proofFileId: record.proofFileId,
 
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
   };
 }
+
+export { asStringArray };

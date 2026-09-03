@@ -25,6 +25,10 @@ export type UpdateOrganizationData = {
   companyType?: string | null;
   maturityLevel?: string | null;
   isSignificantDataFiduciary?: boolean;
+  consentManagerMode?: "NONE" | "EXTERNAL_CM";
+  consentManagerUrl?: string | null;
+  consentManagerWebhookSecret?: string | null;
+  dsrRoutingJson?: Record<string, string> | null;
   updatedBy?: string;
 };
 
@@ -39,6 +43,18 @@ function mapOrganization(row: PrismaOrganization): OrganizationRecord {
     maturityLevel: row.maturityLevel,
     isSignificantDataFiduciary: row.isSignificantDataFiduciary,
     status: row.status,
+    consentManagerMode: row.consentManagerMode,
+    consentManagerUrl: row.consentManagerUrl,
+    consentManagerWebhookSecret: row.consentManagerWebhookSecret,
+    dsrRoutingJson: (() => {
+      const raw = row.dsrRoutingJson;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out[k] = v.trim();
+      }
+      return Object.keys(out).length ? out : null;
+    })(),
     onboardingCompletedAt: row.onboardingCompletedAt,
     onboardingCompletedBy: row.onboardingCompletedBy,
     createdBy: row.createdBy,
@@ -106,6 +122,18 @@ export class OrganizationRepository extends BaseRepository {
           : {}),
         ...(data.isSignificantDataFiduciary !== undefined
           ? { isSignificantDataFiduciary: data.isSignificantDataFiduciary }
+          : {}),
+        ...(data.consentManagerMode !== undefined
+          ? { consentManagerMode: data.consentManagerMode }
+          : {}),
+        ...(data.consentManagerUrl !== undefined
+          ? { consentManagerUrl: data.consentManagerUrl }
+          : {}),
+        ...(data.consentManagerWebhookSecret !== undefined
+          ? { consentManagerWebhookSecret: data.consentManagerWebhookSecret }
+          : {}),
+        ...(data.dsrRoutingJson !== undefined
+          ? { dsrRoutingJson: data.dsrRoutingJson }
           : {}),
         ...(data.updatedBy !== undefined ? { updatedBy: data.updatedBy } : {}),
       },

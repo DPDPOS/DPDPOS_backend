@@ -62,7 +62,11 @@ export class PrismaValidationDataProvider implements ValidationDataProvider {
       }),
       prisma.organization.findFirst({
         where: { id: organizationId, deletedAt: null },
-        select: { isSignificantDataFiduciary: true },
+        select: {
+          isSignificantDataFiduciary: true,
+          consentManagerMode: true,
+          consentManagerUrl: true,
+        },
       }),
       prisma.framework.findFirst({
         where: { organizationId, status: "PUBLISHED", deletedAt: null },
@@ -155,6 +159,8 @@ export class PrismaValidationDataProvider implements ValidationDataProvider {
         processesChildrenData,
         hasDpoUser: Boolean(dpoUser),
         frameworkId,
+        consentManagerMode: org?.consentManagerMode ?? "NONE",
+        consentManagerUrl: org?.consentManagerUrl ?? null,
       },
       controls: controls.map((c) => ({
         id: c.id,
@@ -185,6 +191,7 @@ export class PrismaValidationDataProvider implements ValidationDataProvider {
         hasActiveDpa: v.agreements.length > 0,
         latestReviewOutcome: v.reviews[0]?.outcome ?? null,
         crossBorderAllowed: v.agreements.some((a) => a.crossBorderAllowed),
+        countries: v.countries ?? [],
       })),
     };
   }

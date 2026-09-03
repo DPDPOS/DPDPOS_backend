@@ -79,6 +79,24 @@ export class NoticeController {
       next(err);
     }
   }
+
+  async diff(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const ctx = getRequestContext(req);
+      const { id } = req.params as { id: string };
+      const againstVersion = Number(
+        (req.query as { againstVersion?: string }).againstVersion,
+      );
+      const diff = await noticeService.diff(ctx, id, againstVersion);
+      sendSuccess(res, diff);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const noticeController = new NoticeController();

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { ConflictError, NotFoundError } from "../../../shared/errors/app-error.js";
+import { ConflictError, NotFoundError, ValidationError } from "../../../shared/errors/app-error.js";
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 
 import type { RequestContext } from "../../../shared/types/request-context.js";
@@ -12,6 +12,59 @@ import {
   toNoticeResponse,
   type NoticeResponse,
 } from "../types/notice.types.js";
+
+export type NoticeDiffResponse = {
+  noticeId: string;
+  title: string;
+  fromVersion: number;
+  toVersion: number;
+  unifiedDiff: string;
+  fromContent: string;
+  toContent: string;
+};
+
+/** Minimal unified diff for notice content comparison. */
+export function buildUnifiedDiff(
+  fromLabel: string,
+  toLabel: string,
+  fromText: string,
+  toText: string,
+): string {
+  const a = fromText.replace(/\r\n/g, "\n").split("\n");
+  const b = toText.replace(/\r\n/g, "\n").split("\n");
+  const lines: string[] = [`--- ${fromLabel}`, `+++ ${toLabel}`];
+  const max = Math.max(a.length, b.length);
+  let hunk: string[] = [];
+  let hunkStart = 0;
+  const flush = () => {
+    if (hunk.length === 0) return;
+    lines.push(`@@ -${hunkStart + 1} +${hunkStart + 1} @@`);
+    lines.push(...hunk);
+    hunk = [];
+  };
+  for (let i = 0; i < max; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (left === right) {
+      flush();
+      continue;
+    }
+    if (hunk.length === 0) hunkStart = i;
+    if (left !== undefined && right === undefined) {
+      hunk.push(`-${left}`);
+    } else if (left === undefined && right !== undefined) {
+      hunk.push(`+${right}`);
+    } else {
+      hunk.push(`-${left}`);
+      hunk.push(`+${right}`);
+    }
+  }
+  flush();
+  if (lines.length === 2) {
+    lines.push("@@ unchanged @@");
+  }
+  return lines.join("\n");
+}
 
 export class NoticeService {
   constructor(
@@ -26,7 +79,6 @@ export class NoticeService {
     ctx: RequestContext,
     input: CreateNoticeDto,
   ): Promise<NoticeResponse> {
-    // Version is derived from the latest published version of the same title.
     const latest = await this.repository.findLatestByTitle(
       ctx.organizationId,
       input.title,
@@ -40,14 +92,13 @@ export class NoticeService {
         notice = await this.repository.create(tx, ctx, {
           title: input.title,
           content: input.content,
+          contentFormat: input.contentFormat ?? "PLAIN",
           version,
           effectiveFrom: input.effectiveFrom
             ? new Date(input.effectiveFrom)
             : undefined,
         });
       } catch (err) {
-        // A concurrent publish of the same title can race onto the same
-        // version number; surface it as a clean conflict instead of a 500.
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === "P2002"
@@ -87,6 +138,48 @@ export class NoticeService {
     );
 
     return notices.map(toNoticeResponse);
+  }
+
+  async diff(
+    ctx: RequestContext,
+    id: string,
+    againstVersion: number,
+  ): Promise<NoticeDiffResponse> {
+    const current = await this.repository.findById(ctx.organizationId, id);
+    if (!current) {
+      throw new NotFoundError("Notice not found");
+    }
+    if (againstVersion === current.version) {
+      throw new ValidationError("againstVersion must differ from the notice version");
+    }
+    const other = await this.repository.findByTitleAndVersion(
+      ctx.organizationId,
+      current.title,
+      againstVersion,
+    );
+    if (!other) {
+      throw new NotFoundError(
+        `Notice version ${againstVersion} not found for title "${current.title}"`,
+      );
+    }
+
+    const from = againstVersion < current.version ? other : current;
+    const to = againstVersion < current.version ? current : other;
+
+    return {
+      noticeId: current.id,
+      title: current.title,
+      fromVersion: from.version,
+      toVersion: to.version,
+      fromContent: from.content,
+      toContent: to.content,
+      unifiedDiff: buildUnifiedDiff(
+        `v${from.version}`,
+        `v${to.version}`,
+        from.content,
+        to.content,
+      ),
+    };
   }
 
   async softDelete(
