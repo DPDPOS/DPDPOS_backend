@@ -86,6 +86,27 @@ describe("computeVendorRisk", () => {
     expect(score.childCriticalCount).toBe(2);
   });
 
+  it("caps multi-level HIGH/CRITICAL inheritance at +20 (+5 each)", () => {
+    const none = computeVendorRisk({
+      vendor: baseVendor({ criticality: "MEDIUM" }),
+      hasActiveDpa: true,
+      dpaExpiresAt: new Date(Date.now() + 365 * 86400000),
+      latestReviewOutcome: "APPROVED",
+      latestReviewResidual: "LOW",
+      childCriticalCount: 0,
+    });
+    const chain = computeVendorRisk({
+      vendor: baseVendor({ criticality: "MEDIUM" }),
+      hasActiveDpa: true,
+      dpaExpiresAt: new Date(Date.now() + 365 * 86400000),
+      latestReviewOutcome: "APPROVED",
+      latestReviewResidual: "LOW",
+      childCriticalCount: 5,
+    });
+    expect(chain.residualRiskScore - none.residualRiskScore).toBe(20);
+    expect(chain.factors.some((f) => f.includes("SCRM"))).toBe(true);
+  });
+
   it("flags unacknowledged sub-processor changes", () => {
     const score = computeVendorRisk({
       vendor: baseVendor(),

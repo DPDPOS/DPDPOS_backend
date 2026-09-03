@@ -11,6 +11,10 @@ const CRITICALITY_BASE: Record<string, number> = {
 /**
  * Deterministic inherent/residual scoring for TPRM scorecards.
  * Residual starts from inherent and is adjusted by DPA + latest review + SCRM children.
+ *
+ * Supply-chain inheritance: each HIGH/CRITICAL descendant (any depth) adds +5
+ * to residual risk, capped at +20. Callers should pass the full tree count via
+ * `childCriticalCount` (see VendorRelationshipRepository.countCriticalChildren).
  */
 export function computeVendorRisk(input: {
   vendor: VendorRecord;

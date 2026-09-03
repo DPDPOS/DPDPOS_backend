@@ -15,3 +15,15 @@ export const DPDP_BREACH_NOTIFICATION_HOURS = 72;
 
 /** Automated erasure advance notice period mandated by DPDP Rule 8 (hours). */
 export const DPDP_AUTO_DELETE_NOTICE_HOURS = 48;
+
+/**
+ * Default denylist used when RESTRICTED_TRANSFER_COUNTRIES env is unset.
+ * Prefer reading via env.RESTRICTED_TRANSFER_COUNTRIES at call sites.
+ */
+export const DEFAULT_RESTRICTED_TRANSFER_COUNTRIES = [
+  "CN",
+  "RU",
+  "KP",
+  "IR",
+] as const;
+

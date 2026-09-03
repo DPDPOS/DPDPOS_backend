@@ -235,23 +235,51 @@ export class VendorRelationshipRepository {
     });
   }
 
+  /**
+   * Count HIGH/CRITICAL descendants across the supply-chain tree (BFS),
+   * not only direct children — so multi-level risk inherits into parents.
+   * Weight remains applied in computeVendorRisk as +5 per child (cap +20).
+   */
   async countCriticalChildren(
     organizationId: string,
     parentVendorId: string,
   ): Promise<number> {
-    const rows = await prisma.vendorRelationship.findMany({
-      where: {
-        organizationId,
-        parentVendorId,
-        deletedAt: null,
-        childVendor: {
+    const visited = new Set<string>();
+    const queue = [parentVendorId];
+    let critical = 0;
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const edges = await prisma.vendorRelationship.findMany({
+        where: {
+          organizationId,
+          parentVendorId: current,
           deletedAt: null,
-          criticality: { in: ["HIGH", "CRITICAL"] },
         },
-      },
-      select: { id: true },
-    });
-    return rows.length;
+        select: {
+          childVendorId: true,
+          childVendor: {
+            select: { criticality: true, deletedAt: true },
+          },
+        },
+      });
+
+      for (const edge of edges) {
+        if (edge.childVendor.deletedAt) continue;
+        if (
+          edge.childVendor.criticality === "HIGH" ||
+          edge.childVendor.criticality === "CRITICAL"
+        ) {
+          critical += 1;
+        }
+        queue.push(edge.childVendorId);
+      }
+    }
+
+    return critical;
   }
 
   async countUnacknowledgedChildren(

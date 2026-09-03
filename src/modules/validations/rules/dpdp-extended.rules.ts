@@ -127,15 +127,26 @@ export class CrossBorderTransferControlledRule implements ValidationRuleEvaluato
     code: "cross-border-transfer-controlled",
     title: "Cross-border transfers controlled",
     description:
-      "Where vendors allow cross-border transfer, CTRL-TRANSFER must be in progress with evidence.",
+      "Where vendors allow cross-border transfer or list restricted countries, CTRL-TRANSFER must be in progress with evidence.",
     category: "TRANSFER",
     severity: "HIGH",
   } as const;
 
   async evaluate(input: RuleEvaluationInput) {
+    const { env } = await import("../../../config/env.js");
+    const restricted = new Set(
+      env.RESTRICTED_TRANSFER_COUNTRIES.map((c) => c.toUpperCase()),
+    );
+
     const crossBorderVendors = (input.vendors ?? []).filter(
       (v) => v.crossBorderAllowed && v.status !== "INACTIVE",
     );
+    const restrictedCountryVendors = (input.vendors ?? []).filter((v) => {
+      if (v.status === "INACTIVE") return false;
+      return (v.countries ?? []).some((c) =>
+        restricted.has(String(c).toUpperCase()),
+      );
+    });
     const foreignRecipients = input.processingActivities.filter(
       (a) =>
         !a.deletedAt &&
@@ -143,7 +154,22 @@ export class CrossBorderTransferControlledRule implements ValidationRuleEvaluato
         /cross.?border|foreign|international|transfer/i.test(a.recipientType),
     );
 
-    if (crossBorderVendors.length === 0 && foreignRecipients.length === 0) {
+    const restrictedCountryAssets = input.dataAssets.filter((a) => {
+      if (a.deletedAt) return false;
+      const countries = (a as { countries?: string[] }).countries ?? [];
+      return countries.some(
+        (c) =>
+          restricted.has(String(c).toUpperCase()) ||
+          String(c).toUpperCase() !== "IN",
+      );
+    });
+
+    if (
+      crossBorderVendors.length === 0 &&
+      foreignRecipients.length === 0 &&
+      restrictedCountryVendors.length === 0 &&
+      restrictedCountryAssets.length === 0
+    ) {
       return {
         status: "PASS" as const,
         score: 100,
@@ -159,7 +185,7 @@ export class CrossBorderTransferControlledRule implements ValidationRuleEvaluato
     if (fail) {
       return {
         ...fail,
-        explanation: `${fail.explanation} (${crossBorderVendors.length} vendor(s), ${foreignRecipients.length} activity(ies)).`,
+        explanation: `${fail.explanation} (${crossBorderVendors.length} cross-border vendor(s), ${restrictedCountryVendors.length} restricted-country vendor(s), ${restrictedCountryAssets.length} foreign/restricted asset(s), ${foreignRecipients.length} activity(ies)).`,
       };
     }
     return {

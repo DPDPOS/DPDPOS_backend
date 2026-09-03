@@ -269,6 +269,22 @@ export class VendorService {
     const vendor = await this.vendors.findById(ctx.organizationId, vendorId);
     if (!vendor) throw new NotFoundError("Vendor not found");
 
+    if (input.evidenceFileIds?.length) {
+      const files = await prisma.evidenceFile.findMany({
+        where: {
+          organizationId: ctx.organizationId,
+          deletedAt: null,
+          id: { in: input.evidenceFileIds },
+        },
+        select: { id: true },
+      });
+      if (files.length !== input.evidenceFileIds.length) {
+        throw new ValidationError(
+          "Each evidenceFileId must reference an evidence file in this organisation",
+        );
+      }
+    }
+
     const review = await withTransaction(async (tx) =>
       this.reviews.create(tx, ctx, vendorId, {
         outcome: input.outcome,

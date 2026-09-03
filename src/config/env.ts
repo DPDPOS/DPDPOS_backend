@@ -77,6 +77,16 @@ const envSchema = z.object({
       if (process.env.VITEST !== undefined) return true;
       return value !== "false";
     }),
+  /** ISO country codes that require CTRL-TRANSFER when used by vendors/assets. */
+  RESTRICTED_TRANSFER_COUNTRIES: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? "CN,RU,KP,IR")
+        .split(",")
+        .map((c) => c.trim().toUpperCase())
+        .filter(Boolean),
+    ),
 }).superRefine((value, ctx) => {
   const provider = value.EMAIL_PROVIDER ?? (value.NODE_ENV === "production" ? "SES_SMTP" : "MAILHOG");
   if (value.NODE_ENV === "production" && provider !== "SES_SMTP") {
