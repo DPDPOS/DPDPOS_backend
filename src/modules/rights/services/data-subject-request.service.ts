@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError } from "../../../shared/errors/app-error.j
 import { withTransaction } from "../../../infrastructure/database/transaction-manager.js";
 import { writeOutboxEvent } from "../../../events/outbox/outbox.repository.js";
 import { DOMAIN_EVENTS } from "../../../events/types/base-event.interface.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
 
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
@@ -23,9 +24,36 @@ import type {
 import {
   toDataSubjectRequestResponse,
   type DataSubjectRequestResponse,
+  type VerificationChecklistItem,
 } from "../types/data-subject-request.types.js";
 
 const SLA_MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function normalizeRequesterReference(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function routingMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string" && v.trim()) out[k] = v.trim();
+  }
+  return out;
+}
+
+async function notifyRequesterEmail(
+  requesterReference: string,
+  subject: string,
+  text: string,
+): Promise<void> {
+  const ref = requesterReference.trim();
+  if (!ref.includes("@")) return;
+  const { getEmailProvider } = await import(
+    "../../../infrastructure/email/ses-email.provider.js"
+  );
+  await getEmailProvider().sendText({ recipient: ref, subject, text });
+}
 
 export class DataSubjectRequestService {
   constructor(
@@ -37,8 +65,33 @@ export class DataSubjectRequestService {
     ctx: RequestContext,
     input: CreateDataSubjectRequestDto,
   ): Promise<DataSubjectRequestResponse> {
-    if (input.assignedTo) {
-      await this.assertAssigneeInOrganization(ctx, input.assignedTo);
+    const normalized = normalizeRequesterReference(input.requesterReference);
+
+    const existingOpen = await this.repository.findOpenByRequesterAndType(
+      ctx.organizationId,
+      normalized,
+      input.requestType,
+    );
+    if (existingOpen) {
+      return toDataSubjectRequestResponse(existingOpen, { deduped: true });
+    }
+
+    let assignedTo = input.assignedTo;
+    if (assignedTo) {
+      await this.assertAssigneeInOrganization(ctx, assignedTo);
+    } else {
+      const org = await prisma.organization.findFirst({
+        where: { id: ctx.organizationId, deletedAt: null },
+        select: { dsrRoutingJson: true },
+      });
+      const routeUserId = routingMap(org?.dsrRoutingJson)[input.requestType];
+      if (routeUserId) {
+        const ok = await this.userLookup.existsInOrganization(
+          ctx.organizationId,
+          routeUserId,
+        );
+        if (ok) assignedTo = routeUserId;
+      }
     }
 
     const slaDays =
@@ -46,15 +99,31 @@ export class DataSubjectRequestService {
       DEFAULT_RIGHTS_REQUEST_SLA_DAYS;
     const dueAt = new Date(Date.now() + slaDays * SLA_MS_PER_DAY);
 
+    let checklist: VerificationChecklistItem[] | undefined;
+    if (input.requestType === "ERASURE") {
+      const vendors = await prisma.vendor.findMany({
+        where: { organizationId: ctx.organizationId, deletedAt: null },
+        select: { id: true, name: true },
+        take: 100,
+      });
+      checklist = vendors.map((v) => ({
+        key: `vendor:${v.id}`,
+        label: `Confirm erasure / retention with ${v.name}`,
+        vendorId: v.id,
+        pending: true,
+        notes: null,
+      }));
+    }
+
     return withTransaction(async (tx) => {
       const request = await this.repository.create(tx, ctx, {
         requestType: input.requestType,
-        requesterReference: input.requesterReference,
-        assignedTo: input.assignedTo,
+        requesterReference: input.requesterReference.trim(),
+        assignedTo,
         dueAt,
+        verificationChecklistJson: checklist,
       });
 
-      // PII-safe payload: requesterReference deliberately excluded.
       await writeOutboxEvent(tx, {
         eventType: DOMAIN_EVENTS.RightsRequestSubmitted,
         organizationId: ctx.organizationId,
@@ -64,6 +133,8 @@ export class DataSubjectRequestService {
           requestId: request.id,
           requestType: request.requestType,
           dueAt: request.dueAt?.toISOString(),
+          assignedTo: request.assignedTo,
+          hasRequesterContact: Boolean(request.requesterReference?.includes("@")),
         },
       });
 
@@ -96,14 +167,9 @@ export class DataSubjectRequestService {
       options,
     );
 
-    return requests.map(toDataSubjectRequestResponse);
+    return requests.map((r) => toDataSubjectRequestResponse(r));
   }
 
-  /**
-   * Assign / transition / log resolution / close.
-   * Optimistic locking: `version` in the DTO must match the stored version,
-   * otherwise a concurrent edit won the race → 409.
-   */
   async update(
     ctx: RequestContext,
     id: string,
@@ -122,7 +188,6 @@ export class DataSubjectRequestService {
       await this.assertAssigneeInOrganization(ctx, input.assignedTo);
     }
 
-    // Status transition legality is enforced by the domain state machine.
     const nextStatus = input.status ?? existing.status;
     if (input.status !== undefined) {
       if (RightsRequestStateMachine.isTerminal(existing.status)) {
@@ -140,20 +205,20 @@ export class DataSubjectRequestService {
       }
     }
 
-    // Invariant: CLOSED requires a logged resolution.
     if (nextStatus === "CLOSED" && !input.resolutionSummary?.trim()) {
       throw new ConflictError(
         "A request cannot be closed without a resolution summary",
       );
     }
 
-    // closedAt is set only when actually moving INTO a terminal state — a
-    // resolution-only or re-patch on a terminal request must never rewrite it.
     const enteringTerminal =
       (nextStatus === "CLOSED" || nextStatus === "REJECTED") &&
       existing.status !== nextStatus;
 
-    return withTransaction(async (tx) => {
+    const statusChanged =
+      input.status !== undefined && input.status !== existing.status;
+
+    const result = await withTransaction(async (tx) => {
       const request = await this.repository.update(
         tx,
         ctx,
@@ -168,6 +233,10 @@ export class DataSubjectRequestService {
               ? input.resolutionSummary
               : undefined,
           closedAt: enteringTerminal ? new Date() : undefined,
+          verificationChecklistJson:
+            input.verificationChecklist !== undefined
+              ? input.verificationChecklist
+              : undefined,
         },
       );
 
@@ -186,12 +255,65 @@ export class DataSubjectRequestService {
           payload: {
             requestId: request.id,
             closedAt: request.closedAt?.toISOString(),
+            requestType: request.requestType,
           },
         });
       }
 
       return toDataSubjectRequestResponse(request);
     });
+
+    if (statusChanged && (nextStatus === "IN_PROGRESS" || nextStatus === "CLOSED")) {
+      await notifyRequesterEmail(
+        existing.requesterReference,
+        `Your data rights request is now ${nextStatus}`,
+        `Your ${existing.requestType} request (${existing.id}) is now ${nextStatus}.`,
+      );
+    }
+
+    if (
+      enteringTerminal &&
+      nextStatus === "CLOSED" &&
+      existing.requestType === "ERASURE"
+    ) {
+      await this.enqueueErasureVendorRemediations(ctx, existing.id, existing.verificationChecklistJson);
+    }
+
+    return result;
+  }
+
+  /**
+   * Phase 6: on ERASURE close, ensure erasure checklist items exist for vendors
+   * still pending confirmation (staff follow-up / agent dispatch later).
+   */
+  private async enqueueErasureVendorRemediations(
+    ctx: RequestContext,
+    requestId: string,
+    checklist: VerificationChecklistItem[] | null,
+  ): Promise<void> {
+    const pending = (checklist ?? []).filter((c) => c.pending && c.vendorId);
+    for (const item of pending) {
+      const existing = await prisma.erasureChecklistItem.findFirst({
+        where: {
+          dataSubjectRequestId: requestId,
+          vendorId: item.vendorId!,
+        },
+        select: { id: true },
+      });
+      if (existing) continue;
+      await prisma.erasureChecklistItem
+        .create({
+          data: {
+            organizationId: ctx.organizationId,
+            dataSubjectRequestId: requestId,
+            vendorId: item.vendorId!,
+            systemKey: item.key,
+            systemLabel: item.label,
+            status: "PENDING",
+          },
+        })
+        .catch(() => undefined);
+    }
   }
 
   private async assertAssigneeInOrganization(

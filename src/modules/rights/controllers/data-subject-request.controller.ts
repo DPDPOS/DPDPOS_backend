@@ -29,14 +29,14 @@ export class DataSubjectRequestController {
 
       const request = await dataSubjectRequestService.submit(ctx, body);
 
-      if (body.requestType === "ERASURE") {
+      if (body.requestType === "ERASURE" && !request.deduped) {
         await erasureEvidenceService.startErasure(ctx, request.id, {
           immediate: body.immediateErase,
           coolingOffDays: body.coolingOffDays,
         });
       }
 
-      sendSuccess(res, request, 201);
+      sendSuccess(res, request, request.deduped ? 200 : 201);
     } catch (err) {
       next(err);
     }

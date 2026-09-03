@@ -1,7 +1,16 @@
 import {
   DataSubjectRequestStatus,
   DataSubjectRequestType,
+  Prisma,
 } from "@prisma/client";
+
+export type VerificationChecklistItem = {
+  key: string;
+  label: string;
+  vendorId?: string | null;
+  pending: boolean;
+  notes?: string | null;
+};
 
 export type DataSubjectRequestRecord = {
   id: string;
@@ -17,6 +26,7 @@ export type DataSubjectRequestRecord = {
   closedAt: Date | null;
 
   resolutionSummary: string | null;
+  verificationChecklistJson: VerificationChecklistItem[] | null;
 
   version: number;
 
@@ -41,15 +51,32 @@ export type DataSubjectRequestResponse = {
   closedAt: string | null;
 
   resolutionSummary: string | null;
+  verificationChecklist: VerificationChecklistItem[] | null;
 
   version: number;
+  deduped?: boolean;
 
   createdAt: string;
   updatedAt: string;
 };
 
+function asChecklist(value: unknown): VerificationChecklistItem[] | null {
+  if (!Array.isArray(value)) return null;
+  return value
+    .filter((v): v is Record<string, unknown> => Boolean(v) && typeof v === "object")
+    .map((v) => ({
+      key: String(v.key ?? ""),
+      label: String(v.label ?? ""),
+      vendorId: typeof v.vendorId === "string" ? v.vendorId : null,
+      pending: v.pending !== false,
+      notes: typeof v.notes === "string" ? v.notes : null,
+    }))
+    .filter((v) => v.key && v.label);
+}
+
 export function toDataSubjectRequestResponse(
   request: DataSubjectRequestRecord,
+  options: { deduped?: boolean } = {},
 ): DataSubjectRequestResponse {
   return {
     id: request.id,
@@ -64,10 +91,20 @@ export function toDataSubjectRequestResponse(
     closedAt: request.closedAt ? request.closedAt.toISOString() : null,
 
     resolutionSummary: request.resolutionSummary,
+    verificationChecklist: request.verificationChecklistJson,
 
     version: request.version,
+    ...(options.deduped ? { deduped: true } : {}),
 
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
   };
 }
+
+export function checklistToJson(
+  items: VerificationChecklistItem[],
+): Prisma.InputJsonValue {
+  return items as unknown as Prisma.InputJsonValue;
+}
+
+export { asChecklist };

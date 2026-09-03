@@ -11,9 +11,10 @@ import { createDepartmentsRouter } from "../modules/departments/routes/departmen
 import { createFrameworkRouter } from "../modules/framework/routes/framework.routes.js";
 import { createControlsRouter } from "../modules/controls/routes/control.routes.js";
 import { createRequirementsRouter } from "../modules/requirements/routes/requirement.routes.js";
-import { createDataAssetRouter } from "../modules/inventory/routes/data-asset.routes.js";
+import { createDataAssetRouter, createInventoryDataFlowsRouter } from "../modules/inventory/routes/data-asset.routes.js";
 import { createProcessingActivityRouter } from "../modules/inventory/routes/processing-activity.routes.js";
 import { createVendorRouter } from "../modules/vendors/index.js";
+import { createVendorPortalRouter } from "../modules/vendors/routes/vendor-portal.routes.js";
 import { createConsentRouter } from "../modules/consent/routes/consent.routes.js";
 import { createDataSubjectRequestRouter } from "../modules/rights/routes/data-subject-request.routes.js";
 import { createSubjectLocatorRouter } from "../modules/rights/services/subject-locator.service.js";
@@ -37,6 +38,7 @@ import { createAgentRouter } from "../modules/agents/index.js";
 import { createOnboardingRouter } from "../modules/onboarding/index.js";
 import { createPluginRouter } from "../modules/plugins/index.js";
 import { createLedgerRouter } from "../modules/ledger/index.js";
+import { createPublicOpsRouter } from "../modules/public/public-ops.routes.js";
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
     sendSuccess(res, { status: "ok" });
@@ -68,11 +70,14 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/controls`, createControlsRouter());
   app.use(`${v1}/requirements`, createRequirementsRouter());
   app.use(`${v1}/data-assets`, createDataAssetRouter());
+  app.use(`${v1}/inventory`, createInventoryDataFlowsRouter());
   app.use(`${v1}/processing-activities`, createProcessingActivityRouter());
   app.use(`${v1}/vendors`, createVendorRouter());
+  app.use(`${v1}/vendor-portal`, createVendorPortalRouter());
   app.use(`${v1}`, createConsentRouter());
   app.use(`${v1}/data-subject-requests`, createDataSubjectRequestRouter());
   app.use(`${v1}/subject-locator`, createSubjectLocatorRouter());
+  app.use(`${v1}/public`, createPublicOpsRouter());
   app.use(`${v1}`, createValidationRouter());
   app.use(`${v1}/violations`, createViolationRouter());
   app.use(`${v1}/remediation-tasks`, createRemediationTaskRouter());

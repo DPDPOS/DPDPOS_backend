@@ -46,12 +46,26 @@ export const updateDataSubjectRequestDtoSchema = z
     status: z.enum(REQUEST_STATUSES).optional(),
 
     resolutionSummary: z.string().trim().max(4000).nullable().optional(),
+
+    verificationChecklist: z
+      .array(
+        z.object({
+          key: z.string().trim().min(1).max(200),
+          label: z.string().trim().min(1).max(500),
+          vendorId: z.string().uuid().nullable().optional(),
+          pending: z.boolean(),
+          notes: z.string().trim().max(2000).nullable().optional(),
+        }),
+      )
+      .max(200)
+      .optional(),
   })
   .refine(
     (data) =>
       data.assignedTo !== undefined ||
       data.status !== undefined ||
-      data.resolutionSummary !== undefined,
+      data.resolutionSummary !== undefined ||
+      data.verificationChecklist !== undefined,
     { message: "At least one field to update is required" },
   );
 

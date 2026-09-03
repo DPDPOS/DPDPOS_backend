@@ -9,7 +9,11 @@ import { prisma } from "../../../infrastructure/database/prisma-client.js";
 import { BaseRepository } from "../../../shared/repository/base.repository.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 
-import type { DataSubjectRequestRecord } from "../types/data-subject-request.types.js";
+import {
+  asChecklist,
+  type DataSubjectRequestRecord,
+  type VerificationChecklistItem,
+} from "../types/data-subject-request.types.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -18,6 +22,7 @@ export type CreateDataSubjectRequestData = {
   requesterReference: string;
   assignedTo?: string;
   dueAt?: Date;
+  verificationChecklistJson?: VerificationChecklistItem[];
 };
 
 export type UpdateDataSubjectRequestData = {
@@ -25,6 +30,7 @@ export type UpdateDataSubjectRequestData = {
   status?: DataSubjectRequestStatus;
   resolutionSummary?: string | null;
   closedAt?: Date | null;
+  verificationChecklistJson?: VerificationChecklistItem[] | null;
 };
 
 export type ListDataSubjectRequestsOptions = {
@@ -34,9 +40,7 @@ export type ListDataSubjectRequestsOptions = {
   includeDeleted?: boolean;
 };
 
-function mapRequest(
-  row: PrismaDataSubjectRequest,
-): DataSubjectRequestRecord {
+function mapRequest(row: PrismaDataSubjectRequest): DataSubjectRequestRecord {
   return {
     id: row.id,
 
@@ -52,6 +56,7 @@ function mapRequest(
     closedAt: row.closedAt,
 
     resolutionSummary: row.resolutionSummary,
+    verificationChecklistJson: asChecklist(row.verificationChecklistJson),
 
     version: row.version,
 
@@ -63,6 +68,13 @@ function mapRequest(
     deletedAt: row.deletedAt,
   };
 }
+
+const OPEN_STATUSES: DataSubjectRequestStatus[] = [
+  "SUBMITTED",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "RESPONDED",
+];
 
 export class DataSubjectRequestRepository extends BaseRepository {
   async findById(
@@ -81,6 +93,29 @@ export class DataSubjectRequestRepository extends BaseRepository {
     });
 
     return row ? mapRequest(row) : null;
+  }
+
+  async findOpenByRequesterAndType(
+    organizationId: string,
+    requesterReferenceNormalized: string,
+    requestType: DataSubjectRequestType,
+  ): Promise<DataSubjectRequestRecord | null> {
+    const rows = await prisma.dataSubjectRequest.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        requestType,
+        status: { in: OPEN_STATUSES },
+      },
+      orderBy: { openedAt: "desc" },
+      take: 50,
+    });
+    const match = rows.find(
+      (r) =>
+        r.requesterReference.trim().toLowerCase() ===
+        requesterReferenceNormalized,
+    );
+    return match ? mapRequest(match) : null;
   }
 
   async list(
@@ -120,6 +155,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
         requesterReference: data.requesterReference,
         assignedTo: data.assignedTo,
         dueAt: data.dueAt,
+        verificationChecklistJson: data.verificationChecklistJson ?? undefined,
 
         ...this.auditCreateFields(ctx),
       },
@@ -128,11 +164,6 @@ export class DataSubjectRequestRepository extends BaseRepository {
     return mapRequest(row);
   }
 
-  /**
-   * Optimistic-lock update: applies the change only when the caller's
-   * expected version still matches, and increments the version.
-   * Returns null when the version is stale (row unchanged).
-   */
   async update(
     db: DbClient,
     ctx: RequestContext,
@@ -156,6 +187,9 @@ export class DataSubjectRequestRepository extends BaseRepository {
           ? { resolutionSummary: data.resolutionSummary }
           : {}),
         ...(data.closedAt !== undefined ? { closedAt: data.closedAt } : {}),
+        ...(data.verificationChecklistJson !== undefined
+          ? { verificationChecklistJson: data.verificationChecklistJson }
+          : {}),
         version: { increment: 1 },
         ...this.auditUpdateFields(ctx),
       },
