@@ -35,6 +35,10 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: string; body: str
     subject: 'SLA Warning',
     body: 'Item "{title}" is approaching its due date.',
   },
+  DPA_EXPIRING: {
+    subject: 'DPA expiring: {vendorName}',
+    body: 'The DPA for "{vendorName}" expires on {expiresAt}. Renew or supersede the agreement.',
+  },
 };
 
 export function renderTemplate(type: string, vars: Record<string, string | number>): { subject: string; body: string } {

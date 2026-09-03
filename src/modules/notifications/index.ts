@@ -7,6 +7,7 @@ export {
   onRemediationCompletedNotify,
   onEvidenceApprovedNotify,
   onRightsRequestNotify,
+  onDpaExpiringNotify,
   onValidationFailedNotify,
   onReportGeneratedNotify
 } from "./events/handlers/notification-event.handler.js";

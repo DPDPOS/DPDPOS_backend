@@ -4,6 +4,12 @@ export type MfaOtpEmail = {
   expiresInSeconds: number;
 };
 
+export type TextEmail = {
+  recipient: string;
+  subject: string;
+  text: string;
+};
+
 export type EmailDeliveryResult = { messageId?: string };
 
 /**
@@ -12,4 +18,5 @@ export type EmailDeliveryResult = { messageId?: string };
  */
 export interface EmailProvider {
   sendMfaOtp(input: MfaOtpEmail): Promise<EmailDeliveryResult>;
+  sendText(input: TextEmail): Promise<EmailDeliveryResult>;
 }

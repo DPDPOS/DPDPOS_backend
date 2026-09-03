@@ -7,6 +7,10 @@ import {
   registerEvidenceExpirationScheduler,
   stopEvidenceExpirationScheduler,
 } from "./schedulers/evidence-expiration.scheduler.js";
+import {
+  registerDpaExpiryScheduler,
+  stopDpaExpiryScheduler,
+} from "./schedulers/dpa-expiry.scheduler.js";
 
 // Developer C workers
 import { startNotificationWorker, stopNotificationWorker } from "../modules/notifications/jobs/notification.worker.js";
@@ -25,6 +29,7 @@ export async function registerJobProcessors(): Promise<void> {
   await registerDailyValidationScheduler();
   await registerSlaReminderScheduler();
   await registerEvidenceExpirationScheduler();
+  await registerDpaExpiryScheduler();
 
   // Developer C job processors
   startNotificationWorker();
@@ -44,6 +49,7 @@ export async function stopJobProcessors(): Promise<void> {
     stopReportWorker(),
     stopAiWorker(),
     stopEvidenceExpirationScheduler(),
+    stopDpaExpiryScheduler(),
   ]);
   logger.info("jobs.registry.stopped");
 }

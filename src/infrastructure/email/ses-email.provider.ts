@@ -1,10 +1,16 @@
 import nodemailer from "nodemailer";
 import { appConfig } from "../../config/app.config.js";
 import { ServiceUnavailableError } from "../../shared/errors/app-error.js";
-import type { EmailDeliveryResult, EmailProvider, MfaOtpEmail } from "./email.provider.js";
+import type {
+  EmailDeliveryResult,
+  EmailProvider,
+  MfaOtpEmail,
+  TextEmail,
+} from "./email.provider.js";
 
 let transporter: nodemailer.Transporter | null = null;
 const testOtps = new Map<string, string>();
+const testTextMails: Array<TextEmail> = [];
 
 function testEnvironment(): boolean {
   return appConfig.env === "test" || process.env.VITEST !== undefined;
@@ -40,6 +46,20 @@ class SmtpEmailProvider implements EmailProvider {
     });
     return { messageId: info.messageId };
   }
+
+  async sendText(input: TextEmail): Promise<EmailDeliveryResult> {
+    if (testEnvironment()) {
+      testTextMails.push(input);
+      return {};
+    }
+    const info = await transport().sendMail({
+      from: appConfig.email.from,
+      to: input.recipient,
+      subject: input.subject,
+      text: input.text,
+    });
+    return { messageId: info.messageId };
+  }
 }
 
 const provider: EmailProvider = new SmtpEmailProvider();
@@ -53,4 +73,13 @@ export function getLastEmailOtpForTest(email: string): string | undefined {
 /** Test harness only: simulates a completed worker delivery without SMTP. */
 export function captureMfaOtpForTest(email: string, code: string): void {
   testOtps.set(email.toLowerCase(), code);
+}
+
+/** Test-only helper for transactional text emails. */
+export function getCapturedTextEmailsForTest(): readonly TextEmail[] {
+  return testTextMails;
+}
+
+export function clearCapturedTextEmailsForTest(): void {
+  testTextMails.length = 0;
 }

@@ -10,6 +10,7 @@ import {
   onRemediationCompletedNotify,
   onEvidenceApprovedNotify,
   onRightsRequestNotify,
+  onDpaExpiringNotify,
   onValidationFailedNotify,
   onReportGeneratedNotify,
 } from "../modules/notifications/index.js";
@@ -48,6 +49,7 @@ export function registerEventSubscribers(): void {
     DOMAIN_EVENTS.RightsRequestSubmitted,
     onRightsRequestNotify,
   );
+  registerEventHandler(DOMAIN_EVENTS.DpaExpiring, onDpaExpiringNotify);
   registerEventHandler(DOMAIN_EVENTS.ValidationFailed, onValidationFailedNotify);
   registerEventHandler(DOMAIN_EVENTS.ReportGenerated, onReportGeneratedNotify);
 

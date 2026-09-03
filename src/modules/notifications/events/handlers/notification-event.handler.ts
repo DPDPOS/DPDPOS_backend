@@ -160,12 +160,97 @@ export async function onEvidenceApprovedNotify(event: any) {
 
 export async function onRightsRequestNotify(event: any) {
   try {
-    logger.info(
-      { event },
-      "onRightsRequestNotify: Rights request submitted (DPO notification stub)",
-    );
+    const payload = event.payload ?? {};
+    const requestId = payload.requestId as string | undefined;
+    const requestType = payload.requestType || "REQUEST";
+    if (!requestId) return;
+
+    const request = await prisma.dataSubjectRequest.findFirst({
+      where: { id: requestId, organizationId: event.organizationId },
+      select: { assignedTo: true, requesterReference: true, createdBy: true },
+    });
+
+    const recipients = new Set<string>();
+    if (request?.assignedTo) recipients.add(request.assignedTo);
+    if (request?.createdBy) recipients.add(request.createdBy);
+
+    const dpos = await prisma.user.findMany({
+      where: {
+        organizationId: event.organizationId,
+        deletedAt: null,
+        status: { not: "DISABLED" },
+        userRoles: {
+          some: {
+            role: { name: { in: ["DPO", "ORG_ADMIN", "COMPLIANCE_OFFICER"] } },
+          },
+        },
+      },
+      select: { id: true },
+      take: 5,
+    });
+    for (const d of dpos) recipients.add(d.id);
+
+    for (const userId of recipients) {
+      await notificationService.sendForEvent(
+        event,
+        userId,
+        "RIGHTS_REQUEST_SUBMITTED",
+        { requestType },
+        { type: "DataSubjectRequest", id: requestId },
+      );
+    }
+
+    const ref = request?.requesterReference?.trim() ?? "";
+    if (ref.includes("@")) {
+      const { getEmailProvider } = await import(
+        "../../../../infrastructure/email/ses-email.provider.js"
+      );
+      await getEmailProvider().sendText({
+        recipient: ref,
+        subject: "We received your data rights request",
+        text: `Your ${requestType} request was received (reference ${requestId}). We will update you as it progresses.`,
+      });
+    }
   } catch (err) {
     logger.error({ err, event }, "Failed to process onRightsRequestNotify");
+  }
+}
+
+export async function onDpaExpiringNotify(event: any) {
+  try {
+    const payload = event.payload ?? {};
+    const vendorId = payload.vendorId as string | undefined;
+    const agreementId = payload.agreementId as string | undefined;
+    const vendorName = payload.vendorName || "Vendor";
+    const expiresAt = payload.expiresAt || "soon";
+    if (!vendorId || !agreementId) return;
+
+    const recipients = await prisma.user.findMany({
+      where: {
+        organizationId: event.organizationId,
+        deletedAt: null,
+        status: { not: "DISABLED" },
+        userRoles: {
+          some: {
+            role: { name: { in: ["DPO", "ORG_ADMIN", "COMPLIANCE_OFFICER"] } },
+          },
+        },
+      },
+      select: { id: true },
+      take: 5,
+    });
+
+    for (const user of recipients) {
+      await notificationService.sendForEvent(
+        event,
+        user.id,
+        "DPA_EXPIRING",
+        { vendorName, expiresAt },
+        { type: "VendorAgreement", id: agreementId },
+      );
+    }
+  } catch (err) {
+    logger.error({ err, event }, "Failed to process onDpaExpiringNotify");
   }
 }
 
