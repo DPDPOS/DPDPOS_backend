@@ -6,9 +6,9 @@ import { validateBody } from "../../shared/middleware/validate.middleware.js";
 import { sendSuccess } from "../../shared/middleware/response-envelope.middleware.js";
 import { RateLimitedError, ValidationError } from "../../shared/errors/app-error.js";
 import { SYSTEM_ACTOR_ID } from "../../shared/constants/system-actor.js";
-import { dataSubjectRequestService } from "../modules/rights/services/data-subject-request.service.js";
-import { consentRecordService } from "../modules/consent/services/consent-record.service.js";
-import { REQUEST_TYPES } from "../modules/rights/dto/data-subject-request.dto.js";
+import { dataSubjectRequestService } from "../rights/services/data-subject-request.service.js";
+import { consentRecordService } from "../consent/services/consent-record.service.js";
+import { REQUEST_TYPES } from "../rights/dto/data-subject-request.dto.js";
 import type { RequestContext } from "../../shared/types/request-context.js";
 
 const publicDsrSchema = z.object({

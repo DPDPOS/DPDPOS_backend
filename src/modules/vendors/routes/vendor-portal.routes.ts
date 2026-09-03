@@ -2,18 +2,18 @@ import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
-import { prisma } from "../../infrastructure/database/prisma-client.js";
-import { authenticate } from "../../shared/middleware/authenticate.middleware.js";
-import { requirePermission } from "../../shared/guards/permission.guard.js";
-import { validateBody, validateParams } from "../../shared/middleware/validate.middleware.js";
-import { sendSuccess } from "../../shared/middleware/response-envelope.middleware.js";
+import { prisma } from "../../../infrastructure/database/prisma-client.js";
+import { authenticate } from "../../../shared/middleware/authenticate.middleware.js";
+import { requirePermission } from "../../../shared/guards/permission.guard.js";
+import { validateBody, validateParams } from "../../../shared/middleware/validate.middleware.js";
+import { sendSuccess } from "../../../shared/middleware/response-envelope.middleware.js";
 import {
   getRequestContext,
   type AuthenticatedRequest,
-} from "../../shared/guards/auth.guard.js";
-import { NotFoundError, ValidationError } from "../../shared/errors/app-error.js";
-import { hashToken } from "../auth/utils/token-crypto.js";
-import { PERMISSIONS } from "../../shared/constants/permissions.js";
+} from "../../../shared/guards/auth.guard.js";
+import { NotFoundError, ValidationError } from "../../../shared/errors/app-error.js";
+import { hashToken } from "../../auth/utils/token-crypto.js";
+import { PERMISSIONS } from "../../../shared/constants/permissions.js";
 
 const createTokenSchema = z.object({
   vendorId: z.string().uuid(),
