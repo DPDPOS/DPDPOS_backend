@@ -20,6 +20,11 @@ export const createDataAssetDtoSchema = z.object({
 
   retentionPeriod: z.string().trim().max(255).optional(),
 
+  countries: z
+    .array(z.string().trim().length(2))
+    .max(50)
+    .optional(),
+
   departmentId: z.string().uuid().optional(),
 
   ownerUserId: z.string().uuid().optional(),

@@ -16,6 +16,7 @@ export type DataAssetRecord = {
 
   storageLocation: string | null;
   retentionPeriod: string | null;
+  countries: string[];
 
   status: DataAssetStatus;
 
@@ -40,6 +41,7 @@ export type DataAssetResponse = {
 
   storageLocation: string | null;
   retentionPeriod: string | null;
+  countries: string[];
 
   departmentId: string | null;
   ownerUserId: string | null;
@@ -66,6 +68,7 @@ export function toDataAssetResponse(
 
     storageLocation: asset.storageLocation,
     retentionPeriod: asset.retentionPeriod,
+    countries: asset.countries,
 
     departmentId: asset.departmentId,
     ownerUserId: asset.ownerUserId,

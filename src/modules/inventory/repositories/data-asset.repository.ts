@@ -21,6 +21,8 @@ export type CreateDataAssetData = {
   storageLocation?: string;
   retentionPeriod?: string;
 
+  countries?: string[];
+
   departmentId?: string;
   ownerUserId?: string;
 };
@@ -35,6 +37,8 @@ export type UpdateDataAssetData = {
 
   storageLocation?: string | null;
   retentionPeriod?: string | null;
+
+  countries?: string[];
 
   departmentId?: string | null;
   ownerUserId?: string | null;
@@ -58,6 +62,7 @@ function mapDataAsset(row: PrismaDataAsset): DataAssetRecord {
 
     storageLocation: row.storageLocation,
     retentionPeriod: row.retentionPeriod,
+    countries: row.countries ?? [],
 
     status: row.status,
 
@@ -124,6 +129,7 @@ export class DataAssetRepository extends BaseRepository {
 
         storageLocation: data.storageLocation,
         retentionPeriod: data.retentionPeriod,
+        countries: data.countries ?? [],
 
         departmentId: data.departmentId,
         ownerUserId: data.ownerUserId,
@@ -171,6 +177,8 @@ export class DataAssetRepository extends BaseRepository {
         ...(data.retentionPeriod !== undefined
           ? { retentionPeriod: data.retentionPeriod }
           : {}),
+
+        ...(data.countries !== undefined ? { countries: data.countries } : {}),
 
         ...(data.departmentId !== undefined
           ? { departmentId: data.departmentId }
