@@ -1,3 +1,4 @@
+import "dotenv/config";
 import argon2 from "argon2";
 import { PrismaClient } from "@prisma/client";
 import { SYSTEM_ROLE_PRESETS } from "../../src/shared/constants/permissions.js";

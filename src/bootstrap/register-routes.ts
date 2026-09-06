@@ -34,6 +34,10 @@ import {
   createIdentityAuthRouter,
 } from "../modules/identity/index.js";
 
+// Agent Fleet & Compliance SaaS routes
+import { createAgentRouter } from "../modules/agents/routes/agent.routes.js";
+import { createComplianceRouter } from "../modules/compliance/routes/compliance.routes.js";
+
 export function registerRoutes(app: Express): void {
   app.get("/healthz", (_req: Request, res: Response) => {
     sendSuccess(res, { status: "ok" });
@@ -81,4 +85,15 @@ export function registerRoutes(app: Express): void {
   app.use(`${v1}/reports`, createReportRouter());
   app.use(`${v1}/ai`, createAiRouter());
   app.use(`${v1}/assessments`, createAssessmentRouter());
+
+  // Agent Fleet & DPO Compliance Dashboard routes
+  const agentRouter = createAgentRouter();
+  const complianceRouter = createComplianceRouter();
+
+  app.use(`${v1}/agent`, agentRouter);
+  app.use(`${v1}`, complianceRouter);
+
+  // Dual-mount under /api for seamless UI & Agent interoperability
+  app.use("/api/agent", agentRouter);
+  app.use("/api", complianceRouter);
 }

@@ -19,8 +19,8 @@ export function createApp() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "https://fonts.googleapis.com"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:"],
           connectSrc: ["'self'"],
@@ -34,11 +34,22 @@ export function createApp() {
   app.use(requestLoggerMiddleware);
   app.use(rateLimiterMiddleware);
 
+  // Serve static assets from public folder
+  app.use(express.static(publicDir));
+
   registerRoutes(app);
 
   app.use("/demo", express.static(path.join(publicDir, "demo")));
   app.get("/demo", (_req, res) => {
     res.sendFile(path.join(publicDir, "demo", "index.html"));
+  });
+
+  app.get("/dashboard", (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
+  });
+
+  app.get("/", (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
   });
 
   app.use((req, _res, next) => {

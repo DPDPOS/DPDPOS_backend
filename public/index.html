@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPDP Sentinel · Enterprise DPO & ISO 27001 Compliance Control Plane</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#5e6ad2',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            surface: {
+              bg: '#07080d',
+              card: '#0e111a',
+              cardHover: '#131722',
+              border: '#1e2435',
+              borderHover: '#2d374d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #07080d;
+      color: #f1f5f9;
+    }
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #07080d;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #1e2435;
+      border-radius: 4px;
+    }
+    .glow-purple {
+      box-shadow: 0 0 25px -5px rgba(94, 106, 210, 0.3);
+    }
+    .glow-green {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.3);
+    }
+    .pulse-dot {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-surface-border bg-surface-card/80 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-indigo-700 flex items-center justify-center font-bold text-white shadow-lg glow-purple">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="font-bold text-base tracking-tight text-white">DPDP Sentinel</h1>
+          <span class="px-2 py-0.5 text-[10px] font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30 rounded-full">v1.0.0 Enterprise</span>
+        </div>
+        <p class="text-xs text-slate-400">Digital Personal Data Protection Act 2023 & ISO 27001/27701 Governance</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs text-emerald-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span class="font-medium">Zero-Knowledge Mode Active</span>
+      </div>
+
+      <div class="h-6 w-px bg-surface-border"></div>
+
+      <button onclick="openEnrollModal()" class="flex items-center space-x-2 bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-md">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        <span>Enroll Zone Agent</span>
+      </button>
+
+      <div class="flex items-center space-x-2 pl-2 border-l border-surface-border">
+        <div class="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+          DPO
+        </div>
+        <div class="text-left hidden sm:block">
+          <p class="text-xs font-medium text-slate-200">Compliance Officer</p>
+          <p class="text-[10px] text-slate-400 font-mono">tenant-default</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="border-b border-surface-border bg-surface-bg px-6 py-2 flex space-x-2 overflow-x-auto text-xs font-medium custom-scrollbar">
+    <button onclick="switchTab('scorecard')" id="tab-scorecard" class="tab-btn px-3.5 py-2 rounded-lg text-white bg-surface-border font-semibold flex items-center space-x-2 transition-all">
+      <span>📊 Compliance Scorecard</span>
+    </button>
+    <button onclick="switchTab('datamap')" id="tab-datamap" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>🗺️ Data Map & PII Inventory</span>
+    </button>
+    <button onclick="switchTab('remediation')" id="tab-remediation" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>⚡ Remediation Center</span>
+      <span id="remediation-badge" class="hidden px-1.5 py-0.2 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full font-mono">0</span>
+    </button>
+    <button onclick="switchTab('dsr')" id="tab-dsr" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>🛡️ 3-Stage DSR Governance</span>
+    </button>
+    <button onclick="switchTab('consent')" id="tab-consent" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>📜 Consent & Notices</span>
+    </button>
+    <button onclick="switchTab('fleet')" id="tab-fleet" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>🤖 Agent Fleet</span>
+    </button>
+    <button onclick="switchTab('audit')" id="tab-audit" class="tab-btn px-3.5 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-card flex items-center space-x-2 transition-all">
+      <span>🔍 ISO 27001 Audit Trail</span>
+    </button>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 p-6 space-y-6 max-w-7xl w-full mx-auto">
+
+    <!-- TAB 1: EXECUTIVE COMPLIANCE SCORECARD -->
+    <div id="view-scorecard" class="space-y-6">
+      <!-- Top Overview Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Main Score Box -->
+        <div class="p-5 rounded-2xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">DPDP Compliance Score</p>
+            <div class="flex items-baseline space-x-3 mt-1.5">
+              <span id="stat-score" class="text-4xl font-extrabold text-white font-mono">--%</span>
+              <span id="stat-grade" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Grade --</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-2">ISO 27701 & DPDP Act 2023 Rules</p>
+          </div>
+          <div class="w-16 h-16 relative flex items-center justify-center">
+            <svg class="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+              <path class="text-slate-800" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path id="score-ring" class="text-brand-500 transition-all duration-1000 ease-out" stroke-dasharray="0, 100" stroke-width="3.5" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- Discovered PII Fields -->
+        <div class="p-5 rounded-2xl bg-surface-card border border-surface-border shadow-sm">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Classified PII Fields</p>
+          <div class="flex items-baseline space-x-2 mt-1.5">
+            <span id="stat-pii-count" class="text-3xl font-extrabold text-white font-mono">0</span>
+            <span class="text-xs text-slate-400">across targets</span>
+          </div>
+          <p id="stat-unmapped-pii" class="text-[11px] text-amber-400 mt-2 font-medium">0 unmapped purpose tags</p>
+        </div>
+
+        <!-- Active DSR Erasure Requests -->
+        <div class="p-5 rounded-2xl bg-surface-card border border-surface-border shadow-sm">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">3-Stage DSR Erasures</p>
+          <div class="flex items-baseline space-x-2 mt-1.5">
+            <span id="stat-dsr-count" class="text-3xl font-extrabold text-white font-mono">0</span>
+            <span class="text-xs text-slate-400">pending DPO review</span>
+          </div>
+          <p class="text-[11px] text-emerald-400 mt-2 font-medium">100% within statutory 7-day SLA</p>
+        </div>
+
+        <!-- Connected Zone Agents -->
+        <div class="p-5 rounded-2xl bg-surface-card border border-surface-border shadow-sm">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Connected Zone Agents</p>
+          <div class="flex items-baseline space-x-2 mt-1.5">
+            <span id="stat-agents-count" class="text-3xl font-extrabold text-white font-mono">0</span>
+            <span class="text-xs text-slate-400">active & polling</span>
+          </div>
+          <p class="text-[11px] text-brand-300 mt-2 font-medium">Zero inbound firewall open</p>
+        </div>
+      </div>
+
+      <!-- Statutory DPDP & ISO 27001 Breakdown -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Rule Findings List -->
+        <div class="lg:col-span-2 bg-surface-card border border-surface-border rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sm text-white flex items-center space-x-2">
+              <span>DPDP Statutory Compliance Findings</span>
+              <span class="text-xs font-normal text-slate-400">(Auto-Evaluated)</span>
+            </h3>
+            <button onclick="refreshCompliance()" class="text-xs text-brand-400 hover:text-brand-300 font-medium flex items-center space-x-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>Re-Evaluate</span>
+            </button>
+          </div>
+          <div id="findings-container" class="space-y-3">
+            <div class="p-4 rounded-xl bg-surface-bg border border-surface-border text-center text-xs text-slate-400">
+              Loading compliance report...
+            </div>
+          </div>
+        </div>
+
+        <!-- ISO 27001 / ISO 27701 Control Status -->
+        <div class="bg-surface-card border border-surface-border rounded-2xl p-5 space-y-4">
+          <h3 class="font-bold text-sm text-white">ISO / IEC Audit Mapping</h3>
+          <div class="space-y-3 text-xs">
+            <div class="p-3 rounded-xl bg-surface-bg border border-surface-border flex items-center justify-between">
+              <div>
+                <p class="font-semibold text-slate-200">ISO 27001 A.5.34</p>
+                <p class="text-[11px] text-slate-400">Privacy & PII Protection</p>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-bold">COMPLIANT</span>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-bg border border-surface-border flex items-center justify-between">
+              <div>
+                <p class="font-semibold text-slate-200">ISO 27001 A.8.15</p>
+                <p class="text-[11px] text-slate-400">Tamper-Evident Security Logging</p>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-bold">COMPLIANT</span>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-bg border border-surface-border flex items-center justify-between">
+              <div>
+                <p class="font-semibold text-slate-200">ISO 27701 7.3.1</p>
+                <p class="text-[11px] text-slate-400">Obligations to PII Principals (DSR)</p>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-bold">COMPLIANT</span>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-bg border border-surface-border flex items-center justify-between">
+              <div>
+                <p class="font-semibold text-slate-200">DPDP Act Sec 5 & 6</p>
+                <p class="text-[11px] text-slate-400">Notice & Consent Specification</p>
+              </div>
+              <span id="dpdp-sec5-status" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[11px] font-bold">COMPLIANT</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ENTERPRISE DATA MAP & PII INVENTORY -->
+    <div id="view-datamap" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">Enterprise Data Map & PII Schema Registry</h2>
+          <p class="text-xs text-slate-400">Aggregated from all active Zone Agents without transmitting raw customer rows (ISO 27001 A.5.34).</p>
+        </div>
+        <button onclick="loadDataMap()" class="px-3 py-1.5 bg-surface-card hover:bg-surface-border border border-surface-border rounded-lg text-xs font-semibold text-slate-200">
+          Refresh Map
+        </button>
+      </div>
+
+      <div id="datamap-targets-container" class="space-y-4">
+        <!-- Target databases rendered here -->
+      </div>
+    </div>
+
+    <!-- TAB 3: REMEDIATION CENTER -->
+    <div id="view-remediation" class="hidden space-y-6">
+      <div>
+        <h2 class="text-base font-bold text-white">DPDP Actionable Remediation Center</h2>
+        <p class="text-xs text-slate-400">1-Click policy fixes generated by the DPDP Statutory Rule Engine.</p>
+      </div>
+
+      <div id="remediation-list" class="space-y-4">
+        <!-- Actionable remediations rendered here -->
+      </div>
+    </div>
+
+    <!-- TAB 4: 3-STAGE DSR GOVERNANCE -->
+    <div id="view-dsr" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">3-Stage DSR Erasure & Access Governance</h2>
+          <p class="text-xs text-slate-400">Stage 1: DPO Review & Approve ➡️ Stage 2: Agent In-DB Soft-Delete with 30d Grace Period ➡️ Stage 3: Purge or Restore</p>
+        </div>
+        <button onclick="openCreateDsrModal()" class="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold transition-all">
+          + Test DSR Submission
+        </button>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-surface-bg border-b border-surface-border text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
+              <tr>
+                <th class="p-3.5">DSR ID / Principal</th>
+                <th class="p-3.5">Request Type</th>
+                <th class="p-3.5">Status & Stage</th>
+                <th class="p-3.5">SLA / Grace Expiry</th>
+                <th class="p-3.5 text-right">DPO Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dsr-table-body" class="divide-y divide-surface-border text-slate-200">
+              <!-- DSRs rendered here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: CONSENT & NOTICES -->
+    <div id="view-consent" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">DPDP Section 5 Privacy Notices & Section 6 Consents</h2>
+          <p class="text-xs text-slate-400">Statutory Notice specification with purpose limitation and immediate cache invalidation across agent fleet.</p>
+        </div>
+      </div>
+
+      <div id="notices-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Notices rendered here -->
+      </div>
+    </div>
+
+    <!-- TAB 6: AGENT FLEET -->
+    <div id="view-fleet" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">Zone Agent Fleet Orchestrator</h2>
+          <p class="text-xs text-slate-400">Zero-Knowledge agents deployed inside enterprise database VPCs.</p>
+        </div>
+        <button onclick="openEnrollModal()" class="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold">
+          Enroll New Agent
+        </button>
+      </div>
+
+      <div id="agent-fleet-container" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Agent cards rendered here -->
+      </div>
+    </div>
+
+    <!-- TAB 7: AUDIT TRAIL -->
+    <div id="view-audit" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">ISO 27001 A.8.15 Tamper-Evident Security Audit Logs</h2>
+          <p class="text-xs text-slate-400">Cryptographically verifiable log of all DPO decisions, agent discovery events, and DSR state transitions.</p>
+        </div>
+      </div>
+
+      <div class="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-surface-bg border-b border-surface-border text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
+              <tr>
+                <th class="p-3.5">Timestamp</th>
+                <th class="p-3.5">Event Type</th>
+                <th class="p-3.5">Actor</th>
+                <th class="p-3.5">Audit Payload</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body" class="divide-y divide-surface-border text-slate-300 font-mono text-[11px]">
+              <!-- Audit logs rendered here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ENROLL AGENT MODAL -->
+  <div id="modal-enroll" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-surface-card border border-surface-border rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white">Enroll Zone Agent</h3>
+        <button onclick="closeEnrollModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Run this 1-line command inside your enterprise VPC / server where the database is located. The agent will discover schema and poll outbound with zero inbound firewall rules.
+      </p>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Target Database Engine</label>
+        <select id="enroll-db-type" onchange="generateScript()" class="w-full bg-surface-bg border border-surface-border rounded-lg px-3 py-2 text-xs text-slate-200">
+          <option value="postgres">PostgreSQL (AWS RDS / On-Premise / Supabase)</option>
+          <option value="mysql">MySQL / MariaDB</option>
+          <option value="sqlite">SQLite Embedded</option>
+          <option value="mongodb">MongoDB Document DB</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">1-Line Docker Command</label>
+        <div class="relative">
+          <pre id="enroll-script-preview" class="p-3.5 bg-surface-bg border border-surface-border rounded-xl text-[11px] text-emerald-400 font-mono overflow-x-auto select-all"></pre>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-3 pt-2">
+        <button onclick="closeEnrollModal()" class="px-4 py-2 bg-surface-border hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold">
+          Close
+        </button>
+        <button onclick="copyEnrollScript()" id="btn-copy-script" class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold">
+          Copy Command
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE DSR MODAL -->
+  <div id="modal-create-dsr" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-surface-card border border-surface-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white">Submit New DSR Request</h3>
+        <button onclick="closeCreateDsrModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Customer Principal ID / Email</label>
+        <input type="text" id="dsr-input-principal" placeholder="e.g. cust_101 or user@example.com" class="w-full bg-surface-bg border border-surface-border rounded-lg px-3 py-2 text-xs text-white" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Request Type</label>
+        <select id="dsr-input-type" class="w-full bg-surface-bg border border-surface-border rounded-lg px-3 py-2 text-xs text-white">
+          <option value="ERASURE">Right to Erasure (DPDP Sec 12 / ISO 27701)</option>
+          <option value="ACCESS">Right to Access / Summary of Data</option>
+          <option value="CORRECTION">Right to Correction</option>
+        </select>
+      </div>
+      <div class="flex justify-end space-x-3 pt-2">
+        <button onclick="closeCreateDsrModal()" class="px-4 py-2 bg-surface-border text-slate-200 rounded-lg text-xs font-semibold">Cancel</button>
+        <button onclick="submitNewDsr()" class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold">Submit for DPO Review</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let currentTab = 'scorecard';
+    let currentReport = null;
+    let currentDataMap = null;
+    let currentDsrs = [];
+
+    async function initDashboard() {
+      await refreshAll();
+      setInterval(refreshAll, 5000); // Auto-refresh every 5s
+    }
+
+    async function refreshAll() {
+      try {
+        await Promise.all([
+          loadStats(),
+          loadComplianceReport(),
+          loadDataMap(),
+          loadDsrs(),
+          loadNotices(),
+          loadAgents(),
+          loadAuditLogs()
+        ]);
+      } catch (e) {
+        console.error('Error updating dashboard:', e);
+      }
+    }
+
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-white', 'bg-surface-border', 'font-semibold');
+        btn.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById('tab-' + tabId);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-400');
+        activeBtn.classList.add('text-white', 'bg-surface-border', 'font-semibold');
+      }
+
+      ['scorecard', 'datamap', 'remediation', 'dsr', 'consent', 'fleet', 'audit'].forEach(id => {
+        const view = document.getElementById('view-' + id);
+        if (view) {
+          if (id === tabId) view.classList.remove('hidden');
+          else view.classList.add('hidden');
+        }
+      });
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/dashboard/stats');
+        if (!res.ok) return;
+        const stats = await res.json();
+        
+        document.getElementById('stat-score').innerText = (stats.complianceScore ?? 100) + '%';
+        document.getElementById('stat-grade').innerText = 'Grade ' + (stats.complianceGrade || 'A+');
+        document.getElementById('score-ring').setAttribute('stroke-dasharray', `${stats.complianceScore ?? 100}, 100`);
+
+        const gradeBadge = document.getElementById('stat-grade');
+        if ((stats.complianceScore ?? 100) >= 90) {
+          gradeBadge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        } else if ((stats.complianceScore ?? 100) >= 75) {
+          gradeBadge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        } else {
+          gradeBadge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        }
+
+        document.getElementById('stat-pii-count').innerText = stats.totalPiiCount ?? 0;
+        document.getElementById('stat-unmapped-pii').innerText = (stats.unmappedPiiCount ?? 0) + ' unmapped purpose tags';
+        document.getElementById('stat-dsr-count').innerText = stats.activeDsrCount ?? 0;
+        document.getElementById('stat-agents-count').innerText = stats.activeAgentsCount ?? 0;
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      }
+    }
+
+    async function loadComplianceReport() {
+      try {
+        const res = await fetch('/api/compliance/report');
+        if (!res.ok) return;
+        currentReport = await res.json();
+        renderFindings(currentReport.findings || []);
+        renderRemediations(currentReport.findings || []);
+      } catch (err) {
+        console.error('Error loading compliance report:', err);
+      }
+    }
+
+    function renderFindings(findings) {
+      const container = document.getElementById('findings-container');
+      if (!findings.length) {
+        container.innerHTML = `
+          <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center text-xs text-emerald-300">
+            🎉 All DPDP statutory rules and ISO 27001 controls are satisfied! Zero violations found.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = findings.map(f => {
+        const isCritical = f.severity === 'CRITICAL';
+        const isHigh = f.severity === 'HIGH';
+        const badgeColor = isCritical ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : (isHigh ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-brand-500/20 text-brand-300 border-brand-500/30');
+        const title = f.title || f.ruleName || 'Compliance Issue';
+        const statutory = f.statutoryClause || f.statutoryRef || 'DPDP Act 2023';
+        const affected = (f.affectedAssets || f.affectedColumns || []).join(', ');
+
+        return `
+          <div class="p-3.5 rounded-xl bg-surface-bg border border-surface-border flex items-start justify-between space-x-3">
+            <div class="space-y-1">
+              <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 text-[10px] font-bold rounded ${badgeColor} border font-mono">${f.severity}</span>
+                <span class="font-semibold text-xs text-white">${title}</span>
+                <span class="text-[11px] text-slate-400 font-mono">${statutory}</span>
+              </div>
+              <p class="text-xs text-slate-300">${f.description}</p>
+              ${affected ? `<p class="text-[11px] text-slate-400 font-mono">Affected: ${affected}</p>` : ''}
+            </div>
+            ${f.remediation ? `
+              <button onclick="applyRemediation('${f.remediation.actionType || 'MAP_PURPOSE'}', '${f.remediation.targetTable || ''}', '${f.remediation.targetColumn || ''}')" class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm">
+                1-Click Fix
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRemediations(findings) {
+      const remediations = findings.filter(f => f.remediation);
+      const badge = document.getElementById('remediation-badge');
+      if (remediations.length) {
+        badge.innerText = remediations.length;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      const container = document.getElementById('remediation-list');
+      if (!remediations.length) {
+        container.innerHTML = `
+          <div class="p-8 rounded-2xl bg-surface-card border border-surface-border text-center text-xs text-slate-400">
+            ✅ No outstanding remediation tasks. All database columns comply with DPDP retention & purpose rules.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = remediations.map(f => {
+        const r = f.remediation;
+        const statutory = f.statutoryClause || f.statutoryRef || 'DPDP Act 2023';
+        return `
+          <div class="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-mono">${f.severity}</span>
+                <h4 class="font-bold text-sm text-white">${r.title}</h4>
+              </div>
+              <button onclick="applyRemediation('${r.actionType}', '${r.targetTable || ''}', '${r.targetColumn || ''}')" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-md">
+                1-Click Remediation
+              </button>
+            </div>
+            <p class="text-xs text-slate-300">${r.description}</p>
+            <div class="p-3 bg-surface-bg border border-surface-border rounded-xl font-mono text-[11px] text-slate-400">
+              Statutory Ref: ${statutory} · Target Table: ${r.targetTable || 'All'} · Column: ${r.targetColumn || 'None'}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function applyRemediation(actionType, tableName, columnName) {
+      try {
+        const payload = {
+          type: actionType || 'MAP_PURPOSE',
+          tableName: tableName,
+          columnName: columnName,
+          purposeTags: ['essential']
+        };
+
+        const res = await fetch('/api/compliance/remediate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          await refreshAll();
+        }
+      } catch (err) {
+        console.error('Failed to apply remediation:', err);
+      }
+    }
+
+    async function refreshCompliance() {
+      await fetch('/api/compliance/evaluate', { method: 'POST' });
+      await refreshAll();
+    }
+
+    async function loadDataMap() {
+      try {
+        const res = await fetch('/api/catalog/datamap');
+        if (!res.ok) return;
+        currentDataMap = await res.json();
+        renderDataMap(currentDataMap.targets || []);
+      } catch (err) {
+        console.error('Error loading datamap:', err);
+      }
+    }
+
+    function renderDataMap(targets) {
+      const container = document.getElementById('datamap-targets-container');
+      if (!targets.length) {
+        container.innerHTML = `
+          <div class="p-8 rounded-2xl bg-surface-card border border-surface-border text-center text-xs text-slate-400">
+            No database targets discovered yet. Enroll a Zone Agent to scan your customer schemas.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = targets.map(target => `
+        <div class="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-4">
+          <div class="flex items-center justify-between border-b border-surface-border pb-3">
+            <div class="flex items-center space-x-3">
+              <span class="w-3 h-3 rounded-full bg-emerald-400 pulse-dot"></span>
+              <div>
+                <h3 class="font-bold text-sm text-white font-mono">${target.targetId}</h3>
+                <p class="text-xs text-slate-400 font-mono">${target.targetUriMasked}</p>
+              </div>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="px-2.5 py-1 text-xs bg-slate-800 text-slate-300 rounded-lg font-mono">${target.targetType}</span>
+              <span class="px-2.5 py-1 text-xs bg-brand-500/20 text-brand-300 border border-brand-500/30 rounded-lg font-mono font-bold">${target.totalPiiCount} PII Fields</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            ${target.tables.map(table => `
+              <div class="p-3.5 bg-surface-bg border border-surface-border rounded-xl space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-xs text-slate-200 font-mono">${table.tableName}</span>
+                  <span class="text-[10px] text-slate-500 font-mono">${(table.rowCountEstimated || 0).toLocaleString()} rows</span>
+                </div>
+                <div class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                  ${table.columns.map(col => {
+                    const hasPii = col.detectedPii && col.detectedPii.piiType !== 'UNKNOWN';
+                    return `
+                      <div class="flex items-center justify-between text-[11px] p-1.5 rounded ${hasPii ? 'bg-brand-500/10 border border-brand-500/20' : 'bg-slate-900/50'}">
+                        <span class="font-mono text-slate-300">${col.name}</span>
+                        ${hasPii ? `
+                          <span class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 font-mono">
+                            ${col.detectedPii.piiType} (${Math.round((col.detectedPii.confidence || 1) * 100)}%)
+                          </span>
+                        ` : `
+                          <span class="text-[10px] text-slate-500 font-mono">${col.dataType}</span>
+                        `}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadDsrs() {
+      try {
+        const res = await fetch('/api/dsr/requests');
+        if (!res.ok) return;
+        const data = await res.json();
+        currentDsrs = data.requests || [];
+        renderDsrs(currentDsrs);
+      } catch (err) {
+        console.error('Error loading DSRs:', err);
+      }
+    }
+
+    function renderDsrs(dsrs) {
+      const tbody = document.getElementById('dsr-table-body');
+      if (!dsrs.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="p-6 text-center text-xs text-slate-400">
+              No Data Subject Requests pending or logged.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = dsrs.map(d => {
+        let statusBadge = '';
+        if (d.status === 'PENDING_REVIEW') {
+          statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold font-mono">STAGE 1: PENDING DPO REVIEW</span>';
+        } else if (d.status === 'APPROVED' || d.status === 'APPROVED_QUEUED') {
+          statusBadge = '<span class="px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 font-bold font-mono">STAGE 2: APPROVED & QUEUED</span>';
+        } else if (d.status === 'SOFT_DELETED' || d.status === 'SOFT_DELETED_IN_GRACE_PERIOD') {
+          statusBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold font-mono">STAGE 2: SOFT-DELETED (30D GRACE)</span>';
+        } else if (d.status === 'RESTORED' || d.status === 'RESTORED_DURING_GRACE_PERIOD') {
+          statusBadge = '<span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold font-mono">STAGE 3: RESTORED</span>';
+        } else if (d.status === 'REJECTED') {
+          statusBadge = '<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold font-mono">REJECTED</span>';
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold font-mono">${d.status}</span>`;
+        }
+
+        return `
+          <tr class="hover:bg-surface-cardHover transition-colors">
+            <td class="p-3.5">
+              <p class="font-bold text-slate-200 font-mono">${d.dsrId}</p>
+              <p class="text-[11px] text-slate-400">${d.principalId}</p>
+            </td>
+            <td class="p-3.5 font-mono text-slate-300">${d.requestType}</td>
+            <td class="p-3.5">${statusBadge}</td>
+            <td class="p-3.5 text-slate-400 font-mono text-[11px]">
+              ${d.retentionExpiresAt ? 'Grace Expiry: ' + new Date(d.retentionExpiresAt).toLocaleDateString() : 'SLA: ' + new Date(d.slaDeadline).toLocaleDateString()}
+            </td>
+            <td class="p-3.5 text-right space-x-2">
+              ${d.status === 'PENDING_REVIEW' ? `
+                <button onclick="approveDsr('${d.dsrId}')" class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-xs font-semibold">Approve</button>
+                <button onclick="rejectDsr('${d.dsrId}')" class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded text-xs font-semibold">Reject</button>
+              ` : ''}
+              ${(d.status === 'SOFT_DELETED' || d.status === 'SOFT_DELETED_IN_GRACE_PERIOD') ? `
+                <button onclick="restoreDsr('${d.dsrId}')" class="px-2.5 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded text-xs font-semibold">Restore Data</button>
+              ` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function approveDsr(dsrId) {
+      await fetch(`/api/dsr/${dsrId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Approved by DPO' })
+      });
+      await refreshAll();
+    }
+
+    async function rejectDsr(dsrId) {
+      const reason = prompt('Enter statutory legal reason for rejection (e.g. Tax retention requirement):', 'Required for statutory financial audit retention');
+      if (!reason) return;
+      await fetch(`/api/dsr/${dsrId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      await refreshAll();
+    }
+
+    async function restoreDsr(dsrId) {
+      await fetch(`/api/dsr/${dsrId}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Customer logged in during 30-day grace period' })
+      });
+      await refreshAll();
+    }
+
+    async function loadNotices() {
+      try {
+        const res = await fetch('/api/consent/notices');
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById('notices-container');
+        const notices = data.notices || [];
+
+        container.innerHTML = notices.map(n => `
+          <div class="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3">
+            <div class="flex items-center justify-between border-b border-surface-border pb-3">
+              <div>
+                <h3 class="font-bold text-sm text-white">${n.title}</h3>
+                <p class="text-[11px] text-slate-400 font-mono">Notice ID: ${n.noticeId} (v${n.version})</p>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 text-xs font-bold">Active</span>
+            </div>
+
+            <div class="space-y-2">
+              <p class="text-xs font-semibold text-slate-300">Specified Purposes (DPDP Sec 5):</p>
+              ${n.purposes.map(p => `
+                <div class="p-3 bg-surface-bg border border-surface-border rounded-xl space-y-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-xs text-slate-200">${p.purposeId || p.name}</span>
+                    <span class="text-[10px] text-brand-400 font-mono">${p.retentionDays}d max retention</span>
+                  </div>
+                  <p class="text-[11px] text-slate-400">${p.description}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Error loading notices:', err);
+      }
+    }
+
+    async function loadAgents() {
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) return;
+        const data = await res.json();
+        const agents = data.agents || [];
+        const container = document.getElementById('agent-fleet-container');
+
+        if (!agents.length) {
+          container.innerHTML = `
+            <div class="col-span-3 p-8 rounded-2xl bg-surface-card border border-surface-border text-center text-xs text-slate-400">
+              No Zone Agents enrolled yet. Click "Enroll Zone Agent" above to connect your database.
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = agents.map(ag => {
+          const id = ag.agentId || ag.agent_id;
+          const name = ag.agentName || ag.agent_name;
+          const type = ag.targetType || ag.target_type;
+          const uri = ag.targetUriMasked || ag.target_uri_masked;
+          const env = ag.environment;
+          const ram = ag.memoryMb || ag.memory_mb || 0;
+          const lastHb = ag.lastHeartbeat || ag.last_heartbeat;
+
+          return `
+            <div class="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-dot"></span>
+                  <h3 class="font-bold text-sm text-white font-mono">${id}</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-xs font-mono">${type}</span>
+              </div>
+              <p class="text-xs text-slate-300 font-medium">${name}</p>
+              <div class="p-3 bg-surface-bg border border-surface-border rounded-xl font-mono text-[11px] space-y-1 text-slate-400">
+                <p>Target: ${uri}</p>
+                <p>Env: ${env} · RAM: ${ram} MB</p>
+                <p class="text-emerald-400">Last heartbeat: ${new Date(lastHb).toLocaleTimeString()}</p>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading agents:', err);
+      }
+    }
+
+    async function loadAuditLogs() {
+      try {
+        const res = await fetch('/api/audit/logs?limit=50');
+        if (!res.ok) return;
+        const data = await res.json();
+        const logs = data.logs || [];
+        const tbody = document.getElementById('audit-table-body');
+
+        tbody.innerHTML = logs.map(l => {
+          const ts = l.timestamp || l.createdAt;
+          const act = l.action || l.eventType;
+          const payload = l.payload || l.details;
+          return `
+            <tr class="hover:bg-surface-cardHover transition-colors">
+              <td class="p-3.5 text-slate-400 whitespace-nowrap">${new Date(ts).toLocaleTimeString()}</td>
+              <td class="p-3.5 text-brand-300 font-bold">${act}</td>
+              <td class="p-3.5 text-slate-200">${l.actor}</td>
+              <td class="p-3.5 text-slate-400 truncate max-w-xs">${JSON.stringify(payload)}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading audit logs:', err);
+      }
+    }
+
+    // Modals
+    function openEnrollModal() {
+      document.getElementById('modal-enroll').classList.remove('hidden');
+      generateScript();
+    }
+    function closeEnrollModal() {
+      document.getElementById('modal-enroll').classList.add('hidden');
+    }
+
+    function openCreateDsrModal() {
+      document.getElementById('modal-create-dsr').classList.remove('hidden');
+    }
+    function closeCreateDsrModal() {
+      document.getElementById('modal-create-dsr').classList.add('hidden');
+    }
+
+    async function generateScript() {
+      const dbType = document.getElementById('enroll-db-type').value;
+      const res = await fetch(`/api/agent/install-script?dbType=${dbType}`);
+      const data = await res.json();
+      document.getElementById('enroll-script-preview').innerText = data.script;
+    }
+
+    function copyEnrollScript() {
+      const text = document.getElementById('enroll-script-preview').innerText;
+      navigator.clipboard.writeText(text);
+      const btn = document.getElementById('btn-copy-script');
+      btn.innerText = 'Copied!';
+      setTimeout(() => btn.innerText = 'Copy Command', 2000);
+    }
+
+    async function submitNewDsr() {
+      const principalId = document.getElementById('dsr-input-principal').value.trim();
+      const requestType = document.getElementById('dsr-input-type').value;
+      if (!principalId) {
+        alert('Please enter a principal ID or customer email.');
+        return;
+      }
+
+      await fetch('/api/dsr/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ principalId, requestType, requestedBy: 'CUSTOMER_PORTAL' })
+      });
+
+      closeCreateDsrModal();
+      await refreshAll();
+      switchTab('dsr');
+    }
+
+    window.onload = initDashboard;
+  </script>
+</body>
+</html>

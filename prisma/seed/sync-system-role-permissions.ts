@@ -5,6 +5,7 @@
  *
  * Usage: npx tsx prisma/seed/sync-system-role-permissions.ts
  */
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { SYSTEM_ROLE_PRESETS } from "../../src/shared/constants/permissions.js";
 import { getRedis } from "../../src/infrastructure/cache/redis-client.js";
