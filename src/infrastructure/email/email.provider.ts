@@ -4,6 +4,13 @@ export type MfaOtpEmail = {
   expiresInSeconds: number;
 };
 
+export type OrgActivationEmail = {
+  recipient: string;
+  organizationName: string;
+  adminName: string;
+  activationUrl: string;
+};
+
 export type EmailDeliveryResult = { messageId?: string };
 
 /**
@@ -12,4 +19,5 @@ export type EmailDeliveryResult = { messageId?: string };
  */
 export interface EmailProvider {
   sendMfaOtp(input: MfaOtpEmail): Promise<EmailDeliveryResult>;
+  sendOrganizationActivation?(input: OrgActivationEmail): Promise<EmailDeliveryResult>;
 }

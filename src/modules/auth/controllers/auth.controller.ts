@@ -129,6 +129,45 @@ export class AuthController {
       next(err);
     }
   }
+
+  async registerOrganization(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const result = await authService.registerOrganization(req.body, {
+        userAgent: req.header("user-agent") ?? undefined,
+        ipAddress: req.ip,
+        correlationId: getCorrelationId(),
+      });
+      sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async verifyOrganization(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const token = (req.body?.token || req.query?.token) as string;
+      const email = (req.body?.email || req.query?.email) as string | undefined;
+      const result = await authService.verifyOrganization(
+        { token, email },
+        {
+          userAgent: req.header("user-agent") ?? undefined,
+          ipAddress: req.ip,
+          correlationId: getCorrelationId(),
+        },
+      );
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const authController = new AuthController();

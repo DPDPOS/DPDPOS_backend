@@ -119,6 +119,25 @@ export class AuthRepository extends BaseRepository {
     });
   }
 
+  async findUserByInviteTokenHash(tokenHash: string) {
+    return prisma.user.findFirst({
+      where: {
+        inviteTokenHash: tokenHash,
+        deletedAt: null,
+      },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+        ...userAuthInclude,
+      },
+    });
+  }
+
   async acceptInvite(
     db: DbClient,
     userId: string,

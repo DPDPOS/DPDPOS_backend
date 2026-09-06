@@ -1,7 +1,8 @@
 import argon2 from "argon2";
-import { randomInt, randomUUID } from "node:crypto";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import {
+  ConflictError,
   UnauthorizedError,
   ValidationError,
   RateLimitedError,
@@ -18,6 +19,12 @@ import {
   setCachedPermissions,
   invalidateUserPermissions,
 } from "../../../infrastructure/cache/permission-cache.js";
+import { SYSTEM_ROLE_PRESETS } from "../../../shared/constants/permissions.js";
+import {
+  selectTemplatesForProfile,
+  type FrameworkProfile,
+} from "../../framework/domain/templates.js";
+import { getEmailProvider } from "../../../infrastructure/email/ses-email.provider.js";
 import type { RequestContext } from "../../../shared/types/request-context.js";
 import type {
   AcceptInviteDto,
@@ -27,6 +34,8 @@ import type {
   MfaVerifyDto,
   MfaResendDto,
   RefreshDto,
+  RegisterOrganizationDto,
+  VerifyOrgDto,
 } from "../dto/auth.dto.js";
 import { AuthRepository, type AuthUserRecord } from "../repositories/auth.repository.js";
 import {
@@ -839,6 +848,305 @@ export class AuthService {
       refreshToken,
       tokenType: "Bearer",
       expiresIn: appConfig.jwt.accessTtlSeconds,
+    };
+  }
+
+  async registerOrganization(
+    input: RegisterOrganizationDto,
+    meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
+  ): Promise<{
+    success: true;
+    message: string;
+    organizationId: string;
+    email: string;
+  }> {
+    const email = input.adminEmail.trim().toLowerCase();
+
+    // Check if an active account already exists with this email
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email,
+        deletedAt: null,
+      },
+    });
+
+    if (existingUser && existingUser.status === "ACTIVE") {
+      throw new ConflictError(
+        "An account with this work email address already exists. Please sign in instead.",
+      );
+    }
+
+    const passwordHash = await argon2.hash(input.password);
+    const rawToken = randomBytes(32).toString("hex");
+    const inviteTokenHash = hashToken(rawToken);
+    const inviteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const { organization } = await withTransaction(async (tx) => {
+      // 1. Create Organization
+      const org = await tx.organization.create({
+        data: {
+          name: input.organizationName.trim(),
+          industry: input.industry.trim().toLowerCase(),
+          companySize: input.companySize.trim(),
+          operatingRegion: input.operatingRegion.trim(),
+          companyType: input.companyType?.trim() || "Private Limited",
+          maturityLevel: "Developing",
+          isSignificantDataFiduciary: input.isSignificantDataFiduciary ?? false,
+          status: "ACTIVE",
+        },
+      });
+
+      // 2. Seed System Roles for the Organization
+      const createdRoles = await Promise.all(
+        Object.entries(SYSTEM_ROLE_PRESETS).map(([name, permissions]) =>
+          tx.role.create({
+            data: {
+              organizationId: org.id,
+              name,
+              description: `System role: ${name}`,
+              permissions: [...permissions],
+              isSystemRole: true,
+            },
+          }),
+        ),
+      );
+
+      const adminRole = createdRoles.find((r) => r.name === "ORG_ADMIN")!;
+
+      // 3. Create Admin User in INVITED status until email activation
+      const user = await tx.user.create({
+        data: {
+          organizationId: org.id,
+          name: input.adminName.trim(),
+          email,
+          passwordHash,
+          status: "INVITED",
+          inviteTokenHash,
+          inviteExpiresAt,
+        },
+      });
+
+      // 4. Map Admin Role
+      await tx.userRole.create({
+        data: {
+          organizationId: org.id,
+          userId: user.id,
+          roleId: adminRole.id,
+        },
+      });
+
+      // 5. Create default Compliance Department
+      await tx.department.create({
+        data: {
+          organizationId: org.id,
+          name: "Compliance",
+          headUserId: user.id,
+        },
+      });
+
+      // 6. Generate Statutory Baseline Framework
+      const profile: FrameworkProfile = {
+        industryProfile: input.industry.trim().toLowerCase(),
+        maturityLevel: "basic",
+        dataSensitivity: "medium",
+        departmentCount: 1,
+        processorCount: 0,
+        isSdf: input.isSignificantDataFiduciary ?? false,
+      };
+      const selected = selectTemplatesForProfile(profile);
+      if (selected.controls.length > 0) {
+        const generatedAt = new Date();
+        const framework = await tx.framework.create({
+          data: {
+            organizationId: org.id,
+            name: `DPDP Act 2023 Statutory Baseline — ${input.organizationName.trim()}`,
+            status: "PUBLISHED",
+            industryProfile: profile.industryProfile,
+            maturityLevel: profile.maturityLevel,
+            isSdf: profile.isSdf,
+            roadmapJson: {},
+            publishedAt: generatedAt,
+            createdBy: user.id,
+            updatedBy: user.id,
+          },
+        });
+
+        const controlByTemplateCode = new Map<string, string>();
+        for (const tpl of selected.controls) {
+          const dueAt = new Date(
+            generatedAt.getTime() + tpl.dueDaysFromGenerate * 24 * 60 * 60 * 1000,
+          );
+          const control = await tx.control.create({
+            data: {
+              organizationId: org.id,
+              frameworkId: framework.id,
+              code: tpl.code,
+              title: tpl.title,
+              description: tpl.description,
+              legalBasisRef: tpl.legalBasisRef,
+              dueAt,
+              status: "NOT_STARTED",
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
+          });
+          controlByTemplateCode.set(tpl.code, control.id);
+        }
+
+        const createdRequirementCodes = new Set<string>();
+        for (const tpl of selected.controls) {
+          const controlId = controlByTemplateCode.get(tpl.code);
+          if (!controlId) continue;
+          for (const reqCode of tpl.requirementCodes) {
+            if (createdRequirementCodes.has(reqCode)) continue;
+            const reqTpl = selected.requirements.find((r) => r.code === reqCode);
+            if (!reqTpl) continue;
+            await tx.requirement.create({
+              data: {
+                organizationId: org.id,
+                frameworkId: framework.id,
+                controlId,
+                code: reqTpl.code,
+                title: reqTpl.title,
+                description: reqTpl.description,
+                legalBasisRef: reqTpl.legalBasisRef,
+                createdBy: user.id,
+                updatedBy: user.id,
+              },
+            });
+            createdRequirementCodes.add(reqCode);
+          }
+        }
+      }
+
+      return { organization: org, adminUser: user };
+    });
+
+    const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:3001";
+    const activationUrl = `${frontendBaseUrl}/verify-email?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    try {
+      if (getEmailProvider().sendOrganizationActivation) {
+        await getEmailProvider().sendOrganizationActivation!({
+          recipient: email,
+          organizationName: input.organizationName,
+          adminName: input.adminName,
+          activationUrl,
+        });
+      }
+    } catch (mailErr) {
+      logger.warn(
+        { err: mailErr, email, orgId: organization.id },
+        "Failed to deliver organization activation email via SMTP, token stored in database",
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        "Organization registered successfully. Please check your work email for the activation link.",
+      organizationId: organization.id,
+      email,
+    };
+  }
+
+  async verifyOrganization(
+    input: VerifyOrgDto,
+    meta: { userAgent?: string; ipAddress?: string; correlationId?: string } = {},
+  ): Promise<{
+    success: true;
+    user: AuthMeResponse;
+    tokens: AuthTokens;
+    organization: { id: string; name: string };
+  }> {
+    const hashed = hashToken(input.token.trim());
+    const rawUser = await this.repo.findUserByInviteTokenHash(hashed);
+
+    if (!rawUser) {
+      throw new ValidationError("Invalid or expired organization activation token");
+    }
+
+    if (rawUser.inviteExpiresAt && rawUser.inviteExpiresAt < new Date()) {
+      throw new ValidationError(
+        "Activation link has expired. Please contact support or register again.",
+      );
+    }
+
+    const { authUser, orgRecord } = await withTransaction(async (tx) => {
+      await tx.user.update({
+        where: { id: rawUser.id },
+        data: {
+          status: "ACTIVE",
+          inviteTokenHash: null,
+          inviteExpiresAt: null,
+          lastLoginAt: new Date(),
+        },
+      });
+
+      const updated = await tx.user.findUnique({
+        where: { id: rawUser.id },
+        include: {
+          organization: { select: { id: true, name: true, status: true } },
+          userRoles: {
+            include: {
+              role: {
+                select: {
+                  name: true,
+                  permissions: true,
+                  deletedAt: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const activeRoles = updated!.userRoles
+        .map((ur) => ur.role)
+        .filter((role) => role.deletedAt === null);
+
+      const authUserRecord: AuthUserRecord = {
+        id: updated!.id,
+        organizationId: updated!.organizationId,
+        email: updated!.email,
+        name: updated!.name,
+        passwordHash: updated!.passwordHash,
+        status: updated!.status,
+        authSource: updated!.authSource,
+        mfaEnabled: updated!.mfaEnabled,
+        mfaSecretEnc: updated!.mfaSecretEnc,
+        roleNames: activeRoles.map((r) => r.name),
+        permissions: [...new Set(activeRoles.flatMap((r) => r.permissions))],
+      };
+
+      return { authUser: authUserRecord, orgRecord: updated!.organization };
+    });
+
+    const tokens = await this.issueSession(authUser, meta, {
+      emitLoginEvent: true,
+      activateIfInvited: true,
+      correlationId: meta.correlationId,
+      mfaVerified: false,
+    });
+
+    return {
+      success: true,
+      user: {
+        id: authUser.id,
+        organizationId: authUser.organizationId,
+        email: authUser.email,
+        name: authUser.name,
+        status: authUser.status,
+        roles: authUser.roleNames,
+        permissions: authUser.permissions,
+        mfaEnabled: authUser.mfaEnabled,
+        mfaEnrollmentRequired: false,
+      },
+      tokens,
+      organization: {
+        id: orgRecord.id,
+        name: orgRecord.name,
+      },
     };
   }
 }

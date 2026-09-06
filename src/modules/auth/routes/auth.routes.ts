@@ -10,10 +10,29 @@ import {
   mfaResendDtoSchema,
   mfaVerifyDtoSchema,
   refreshDtoSchema,
+  registerOrganizationDtoSchema,
+  verifyOrgDtoSchema,
 } from "../dto/auth.dto.js";
 
 export function createAuthRouter(): Router {
   const router = Router();
+
+  router.post(
+    "/register-org",
+    validateBody(registerOrganizationDtoSchema),
+    (req, res, next) => void authController.registerOrganization(req, res, next),
+  );
+
+  router.post(
+    "/verify-org",
+    validateBody(verifyOrgDtoSchema),
+    (req, res, next) => void authController.verifyOrganization(req, res, next),
+  );
+
+  router.get(
+    "/verify-org",
+    (req, res, next) => void authController.verifyOrganization(req, res, next),
+  );
 
   router.post(
     "/login",

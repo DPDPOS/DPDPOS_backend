@@ -46,6 +46,27 @@ export const mfaResendDtoSchema = z
   .object({ mfaToken: z.string().min(1) })
   .strict();
 
+export const registerOrganizationDtoSchema = z
+  .object({
+    organizationName: z.string().trim().min(2).max(100),
+    industry: z.string().trim().min(2).max(50),
+    companySize: z.string().trim().min(1).max(50),
+    operatingRegion: z.string().trim().min(2).max(50),
+    companyType: z.string().trim().min(2).max(50).optional(),
+    isSignificantDataFiduciary: z.boolean().default(false),
+    adminName: z.string().trim().min(2).max(100),
+    adminEmail: z.string().trim().email().max(320),
+    password: z.string().min(8).max(200),
+  })
+  .strict();
+
+export const verifyOrgDtoSchema = z
+  .object({
+    token: z.string().min(1),
+    email: z.string().trim().email().max(320).optional(),
+  })
+  .strict();
+
 export type LoginDto = z.infer<typeof loginDtoSchema>;
 export type RefreshDto = z.infer<typeof refreshDtoSchema>;
 export type LogoutDto = z.infer<typeof logoutDtoSchema>;
@@ -53,3 +74,5 @@ export type AcceptInviteDto = z.infer<typeof acceptInviteDtoSchema>;
 export type MfaConfirmDto = z.infer<typeof mfaConfirmDtoSchema>;
 export type MfaVerifyDto = z.infer<typeof mfaVerifyDtoSchema>;
 export type MfaResendDto = z.infer<typeof mfaResendDtoSchema>;
+export type RegisterOrganizationDto = z.infer<typeof registerOrganizationDtoSchema>;
+export type VerifyOrgDto = z.infer<typeof verifyOrgDtoSchema>;
